@@ -15,7 +15,7 @@ rm -rf .build/native-bundle
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" .build/AppIcon.iconset
 cp Packaging/Info.plist "$bundle/Contents/Info.plist"
 cp .build/release/ScreenSharingProxy .build/release/screensharing-proxy-diagnose "$bundle/Contents/MacOS/"
-swift Packaging/app-icon.swift .build/AppIcon.iconset
+swift Packaging/app-icon.swift Packaging/Artwork/AppIcon.png .build/AppIcon.iconset
 iconutil -c icns .build/AppIcon.iconset -o "$bundle/Contents/Resources/AppIcon.icns"
 plutil -lint "$bundle/Contents/Info.plist"
 for executable in ScreenSharingProxy screensharing-proxy-diagnose; do
