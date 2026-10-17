@@ -161,12 +161,13 @@ private final class RelayEvents: @unchecked Sendable {
         #expect(result == .failed(.localAddressUnavailable))
     }
 
-    @Test func runnerStillRejectsOutputEOFWithoutATerminalEvent() async throws {
+    @Test(arguments: [0.0, 0.2])
+    func runnerStillRejectsOutputEOFWithoutATerminalEvent(exitDelay: Double) async throws {
         guard let ruby else { return }
         let script = try fixture("""
         emit(config, 'ready')
         STDOUT.close
-        sleep 0.2
+        sleep \(exitDelay)
         """)
         defer { try? FileManager.default.removeItem(at: script.deletingLastPathComponent()) }
         let result = await RubyRelayRunner(executable: ruby, script: script.path).run(

@@ -213,6 +213,9 @@ public struct RubyRelayRunner: Sendable {
                 if cancellation.isCancelled { return .cancelled }
                 if let failure { return .failed(failure) }
                 if reapError != 0 || signal != 0 { return .failed(.internalFailure) }
+                // Apply the same framing rule whether stdout EOF or child exit
+                // becomes observable first. A silent exit is not a clean stop.
+                guard ready && stopped else { return .failed(.incompatibleProtocol) }
                 return .exited(exitCode)
             }
             // stdout can close before waitid observes process exit. A terminal
