@@ -36,6 +36,7 @@ module ScreenSharingRelay
       @udp_routes = {}
       3.times do |offset|
         external = own(UDPSocket.new(Socket::AF_INET))
+        external.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVBUF, 262_144)
         # Reserve exclusively first. An existing connected or wildcard socket
         # must prevent startup, even when that owner enabled reuse. Enable reuse
         # only after reservation so Apple's later wildcard bind can coexist.
@@ -44,6 +45,7 @@ module ScreenSharingRelay
         external.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEPORT, 1)
         external.connect(@remote, @remote_base + offset)
         injector = own(UDPSocket.new(Socket::AF_INET))
+        injector.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDBUF, 131_072)
         injector.bind('127.0.0.1', 0)
         injector.connect(@external, @base + offset)
         @udp_routes[external] = [injector, :received]

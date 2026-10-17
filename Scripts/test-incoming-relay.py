@@ -49,6 +49,7 @@ class IncomingTests(unittest.TestCase):
                 self.owned.extend(sockets)
                 for s in sockets:
                     s.settimeout(2)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 131072)
                 return base, sockets
             except OSError:
                 for s in sockets:
@@ -64,6 +65,7 @@ class IncomingTests(unittest.TestCase):
         s = self.own(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
         s.bind(('0.0.0.0', self.base + offset))
         if connected:
             s.connect(('127.0.0.1', self.remote_base + offset))
