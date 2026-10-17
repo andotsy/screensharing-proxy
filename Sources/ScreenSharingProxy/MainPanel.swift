@@ -13,6 +13,7 @@ struct MainPanel: View {
                 Text("Screen Sharing Diagnostics").font(.title2.weight(.semibold))
                 Text("Keep the Screen Sharing connection attempt open on this Mac, then collect a report to send for help.")
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if model.isBusy {
                 ProgressView().controlSize(.small)
@@ -29,6 +30,7 @@ struct MainPanel: View {
             }
             if let message = model.message {
                 Text(message).font(.callout).multilineTextAlignment(.center).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
             Text("Private addresses and paths are hidden in the report.")

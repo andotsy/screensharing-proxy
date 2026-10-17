@@ -17,8 +17,9 @@ final class PanelController: NSObject, NSWindowDelegate {
             let panel = NSWindow(contentViewController: controller)
             panel.title = "Screen Sharing Diagnostics"
             panel.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-            panel.contentMinSize = NSSize(width: 440, height: 440)
-            panel.setContentSize(NSSize(width: 480, height: 460))
+            // Leave room for the progress/cancel and saved/retry states too.
+            panel.contentMinSize = NSSize(width: 440, height: 540)
+            panel.setContentSize(NSSize(width: 480, height: 540))
             panel.isReleasedWhenClosed = false
             panel.isOpaque = false
             panel.backgroundColor = .clear

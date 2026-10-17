@@ -42,3 +42,11 @@ jobs:
           hdiutil attach "dist/ScreenSharingProxy-v$SSP_VERSION-macOS-arm64.dmg" -readonly -nobrowse -mountpoint "$mount_path"
           trap 'hdiutil detach "$mount_path"' EXIT
           .build/dmg-venv/bin/python Scripts/verify-dmg-layout.py "$mount_path"
+      - name: Save native smoke failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-smoke-debug
+          path: .build/native-smoke-debug/
+          if-no-files-found: ignore
+          retention-days: 1

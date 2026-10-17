@@ -22,13 +22,34 @@ def main():
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     with tempfile.TemporaryDirectory(prefix="ssp-app-") as temporary:
         report = Path(temporary) / "diagnostics.zip"
+        process = subprocess.Popen([str(binary), "--smoke-test", str(report)],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            result = subprocess.run([str(binary), "--smoke-test", str(report)], capture_output=True, text=True, timeout=90)
-        except subprocess.TimeoutExpired as error:
-            print(error.stdout or b"", error.stderr or b"", flush=True)
+            stdout, stderr = process.communicate(timeout=45)
+        except subprocess.TimeoutExpired:
+            # Capture only this disposable CI app and the hosted runner desktop.
+            # This helper is not part of diagnostic collection on users' Macs.
+            debug = Path('.build/native-smoke-debug')
+            debug.mkdir(parents=True, exist_ok=True)
+            for command in [
+                ['/usr/bin/sample', str(process.pid), '1', '-file', str(debug / 'sample.txt')],
+                ['/usr/sbin/screencapture', '-x', '-m', str(debug / 'desktop.png')],
+            ]:
+                try:
+                    subprocess.run(command, capture_output=True, timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+            process.kill()
+            stdout, stderr = process.communicate(timeout=10)
+            (debug / 'app.log').write_text(stdout + stderr)
+            print(stdout + stderr, flush=True)
             raise
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert "Native collection, save dialog and ZIP export passed." in result.stdout
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=10)
+        assert process.returncode == 0, stdout + stderr
+        assert "Native collection, save dialog and ZIP export passed." in stdout
         with zipfile.ZipFile(report) as archive:
             assert archive.testzip() is None
             assert set(archive.namelist()) == {"diagnostics.json", "README.txt"}
