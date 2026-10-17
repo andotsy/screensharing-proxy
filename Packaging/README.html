@@ -19,9 +19,14 @@ This alpha does not relay Screen Sharing or change the firewall.</p>
 <ol><li>Drag <strong>ScreenSharingProxy.app</strong> onto <strong>Applications</strong>.</li>
 <li>Open <strong>Screen Sharing Proxy</strong> in Applications. The window opens
 and discovers the service automatically. Use its menu bar icon to reopen it.</li>
-<li>Start the failing Screen Sharing session. Optionally enter the remote Mac's
-numeric IP, then click <strong>Collect Diagnostics</strong>. Copy or save the
-report in the Diagnostics pane.</li></ol>
+<li>On the <strong>viewer Mac with the blocked service</strong>, optionally enter
+the remote Mac's numeric IP. In <strong>Diagnostics</strong>, choose
+<strong>Capture Baseline</strong> before connecting and wait for it to finish.</li>
+<li>Start the High Performance connection and choose <strong>Capture During Session</strong>
+while it is starting or failing. Keep the attempt open while collection runs.</li>
+<li><strong>Save Report…</strong> exports both captures together. Private details
+are redacted with consistent tokens across the pair. <strong>Clear Captures</strong>
+starts a new pair and unlocks the remote IP/privacy options.</li></ol>
 <p>No Xcode or Python installation is needed. Launch at login is optional in General.</p>
 <h2>If macOS blocks the app</h2>
 <p>This alpha is ad hoc signed and not notarized. After installing it in

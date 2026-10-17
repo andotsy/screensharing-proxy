@@ -95,13 +95,13 @@ struct MainPanel: View {
                     TextField("Optional IPv4 or IPv6 address", text: $model.remoteAddress)
                         .textFieldStyle(.roundedBorder).frame(width: 240)
                         .accessibilityLabel("Optional remote Mac IP address")
-                        .disabled(model.isBusy)
+                        .disabled(model.isBusy || model.hasBaseline)
                 }
                 if !model.remoteIsValid {
                     Text("Enter a numeric IP address, or leave this empty.").font(.callout).foregroundStyle(.red)
                 }
                 Divider()
-                Text("Start the failing Screen Sharing session, then collect diagnostics. Without a remote IP, some session sockets may not be identified.")
+                Text("On this viewer Mac, enter the remote IP if known. In Diagnostics, capture a baseline before connecting, then capture during the High Performance connection attempt.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -110,9 +110,27 @@ struct MainPanel: View {
     private var diagnosticsPane: some View {
         VStack(alignment: .leading, spacing: 18) {
             group("Report Privacy") {
-                Toggle("Include private addresses and paths", isOn: $model.includePrivate).disabled(model.isBusy)
+                Toggle("Include private addresses and paths", isOn: $model.includePrivate).disabled(model.isBusy || model.hasBaseline)
                 Text("Reports are redacted by default. No packet contents, passwords or process environments are collected.")
                     .font(.callout).foregroundStyle(.secondary)
+            }
+            group("Before and During Connection") {
+                Text("1. Before connecting, capture a baseline.\n2. Start the High Performance connection and capture during the attempt.\n3. Save one report containing both captures.")
+                    .font(.callout).foregroundStyle(.secondary)
+                HStack {
+                    Button("Capture Baseline") { model.captureBaseline() }
+                        .disabled(model.isBusy || model.hasBaseline || !model.remoteIsValid)
+                    Button("Capture During Session") { model.captureSession() }
+                        .disabled(model.isBusy || !model.hasBaseline)
+                }
+                if model.hasBaseline {
+                    Divider()
+                    LabeledContent("Baseline", value: "Captured")
+                    LabeledContent("During session", value: model.sessionReport == nil ? "Waiting" : "Captured")
+                    Text("Remote IP and privacy settings are kept the same for both captures. The second capture takes ten socket snapshots; keep the attempt open while it runs.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Button("Clear Captures") { model.resetPair() }.disabled(model.isBusy)
+                }
             }
             group("Last Completed Report") {
                 if let collection = model.collection {
@@ -121,6 +139,8 @@ struct MainPanel: View {
                     LabeledContent("Private details", value: collection.report.privateDetailsIncluded ? "Included" : "Redacted")
                     Divider()
                     LabeledContent("Socket snapshots", value: "\(collection.report.samples.count)")
+                    Divider()
+                    LabeledContent("Performance component paths", value: "\(collection.report.components.count)")
                     if let selected = collection.report.proxyDiscovery?.selectedExecutable {
                         Divider()
                         LabeledContent("Selected executable") { Text(selected).textSelection(.enabled).multilineTextAlignment(.trailing) }
@@ -148,7 +168,7 @@ struct MainPanel: View {
                     .disabled(model.activity == .cancelling)
             } else {
                 Button("Find Service") { model.discover() }
-                Button("Collect Diagnostics") { model.collect(); pane = .diagnostics }
+                Button(model.hasBaseline ? "Capture During Session" : "Collect Diagnostics") { model.collect(); pane = .diagnostics }
                     .buttonStyle(.borderedProminent).disabled(!model.remoteIsValid)
             }
         }.padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 20)

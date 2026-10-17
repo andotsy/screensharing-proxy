@@ -66,7 +66,8 @@ enum ServiceManifestParser {
               let label = plist["Label"] as? String else { return nil }
         let program = plist["Program"] as? String ?? (plist["ProgramArguments"] as? [String])?.first
         let matches = label.lowercased().split(separator: ".").contains("proxyd")
-            || program.map { CandidateNames.isProxyd($0) || candidatePaths.contains($0) } == true
+            || PerformanceComponent.relevantService(label)
+            || program.map { CandidateNames.isProxyd($0) || PerformanceComponent.role($0) != nil || candidatePaths.contains($0) } == true
         guard matches else { return nil }
         return ServiceManifest(path: path, label: label, program: program,
             machServices: (plist["MachServices"] as? [String: Any])?.keys.sorted() ?? [],

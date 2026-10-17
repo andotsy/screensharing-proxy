@@ -3,10 +3,10 @@
 A native macOS project investigating a viewer-side relay for Apple's High
 Performance Screen Sharing.
 
-**Native app prerelease: `v0.1.0-alpha.2`.** Its macOS arm64 DMG contains
+**Native app prerelease: `v0.1.0-alpha.3`.** Its macOS arm64 DMG contains
 `ScreenSharingProxy.app`, an original relay icon, an Applications shortcut and an
 offline installation guide. See [installation](docs/INSTALL.md) and
-[release notes](docs/releases/0.1.0-alpha.2.md).
+[release notes](docs/releases/0.1.0-alpha.3.md).
 
 The app opens a native window and automatically discovers an explicitly allowed
 `proxyd`. It can collect, copy and save redacted diagnostics without Terminal.
@@ -20,6 +20,10 @@ Implemented:
 
 - A read-only macOS diagnostic CLI: firewall entries, executable identities,
   launchd manifest candidates, and correlated TCP/UDP socket snapshots.
+- Performance component evidence for the viewer, server, session agent and
+  `avconferenced`, including separate app/executable firewall rules, socket
+  delegation entitlements, binding categories and visible host UDP-base settings.
+- Before/during captures in one export, with consistent redaction across the pair.
 - Automatic discovery and selection of an explicitly allowed `proxyd`, including
   checks for global overrides, missing executables and ambiguous candidates.
 - Bounded subprocess output, monotonic deadlines, cancellation, process-group

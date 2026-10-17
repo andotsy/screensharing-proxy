@@ -11,8 +11,10 @@ private actor CollectorFixture: DiagnosticCollecting {
     func inspect(_ options: DiagnosticOptions) async -> DiagnosticCollection {
         calls.append(options); started = true
         if delay != .zero { try? await Task.sleep(for: delay) }
-        let report = DiagnosticReport(schemaVersion: 1, collectedAt: "fixture", platform: "macOS",
+        var report = DiagnosticReport(schemaVersion: 2, collectedAt: "fixture", platform: "macOS",
             privateDetailsIncluded: options.includePrivate, remoteFilter: options.remote?.value)
+        report.capturePhase = options.capturePhase
+        report.redactionScopeID = options.redactionScope.id
         return .init(report: report, discovery: .init(status: .notFound, candidates: [], selected: nil, reason: "fixture"))
     }
     func hasStarted() -> Bool { started }
@@ -20,6 +22,50 @@ private actor CollectorFixture: DiagnosticCollecting {
 
 @MainActor @Suite("Native app collection state")
 struct DiagnosticsModelTests {
+    @Test func pairedCaptureLocksOptionsAndExportsBothWithOneRedactionScope() async throws {
+        let fixture = CollectorFixture()
+        let model = DiagnosticsModel(collector: fixture)
+        model.remoteAddress = "192.0.2.5"
+        model.captureSession()
+        #expect(await fixture.calls.isEmpty)
+        model.captureBaseline()
+        await model.waitForCompletion()
+        #expect(model.hasBaseline)
+        model.remoteAddress = "invalid.example"
+        model.includePrivate = true
+        model.captureSession()
+        await model.waitForCompletion()
+        let calls = await fixture.calls
+        #expect(calls.count == 2)
+        #expect(calls[1].samples == 10)
+        #expect(calls[1].remote == calls[0].remote)
+        #expect(!calls[1].includePrivate)
+        #expect(calls[0].redactionScope.id == calls[1].redactionScope.id)
+        let data = try #require(model.reportData)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["kind"] as? String == "screenSharingCapturePair")
+        #expect((json["baseline"] as? [String: Any])?["capturePhase"] as? String == "baseline")
+        #expect((json["duringSession"] as? [String: Any])?["capturePhase"] as? String == "duringSession")
+        model.discover()
+        await model.waitForCompletion()
+        #expect(model.reportData == data)
+        model.resetPair()
+        #expect(!model.hasBaseline && model.reportData == nil)
+    }
+
+    @Test func cancellingSecondCapturePreservesBaselineExport() async throws {
+        let fixture = CollectorFixture()
+        let model = DiagnosticsModel(collector: fixture)
+        model.captureBaseline()
+        await model.waitForCompletion()
+        let data = try #require(model.reportData)
+        model.captureSession()
+        model.cancel()
+        await model.waitForCompletion()
+        #expect(model.reportData == data)
+        #expect(model.hasBaseline && model.sessionReport == nil)
+    }
+
     @Test func discoveryNeedsNoManualPathOrRemoteAddress() async {
         let fixture = CollectorFixture()
         let model = DiagnosticsModel(collector: fixture)

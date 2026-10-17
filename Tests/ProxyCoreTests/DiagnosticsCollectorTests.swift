@@ -100,7 +100,7 @@ struct DiagnosticsCollectorTests {
         #expect(json.contains("address-1"))
         let commands = await runner.commands
         #expect(commands.filter { $0.executable.hasSuffix("socketfilterfw") }.allSatisfy {
-            ["--getglobalstate", "--getblockall", "--getallowsigned", "--listapps"].contains($0.arguments[0])
+            ["--getglobalstate", "--getblockall", "--getallowsigned", "--listapps", "--getappblocked"].contains($0.arguments[0])
         })
     }
 

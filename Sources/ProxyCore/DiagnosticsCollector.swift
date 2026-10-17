@@ -10,15 +10,20 @@ public struct DiagnosticOptions: Sendable {
     public let samples: Int
     public let interval: TimeInterval
     public let includePrivate: Bool
+    public let capturePhase: String
+    public let redactionScope: DiagnosticRedactionScope
 
-    public enum ValidationError: Error { case invalidSampling }
+    public enum ValidationError: Error { case invalidSampling, invalidPhase }
     public init(remote: IPAddress? = nil, samples: Int = 3, interval: TimeInterval = 1,
-                includePrivate: Bool = false) throws {
+                includePrivate: Bool = false, capturePhase: String = "snapshot",
+                redactionScope: DiagnosticRedactionScope? = nil) throws {
         guard (1...10).contains(samples), interval.isFinite, (0.2...5).contains(interval) else {
             throw ValidationError.invalidSampling
         }
+        guard ["snapshot", "baseline", "duringSession"].contains(capturePhase) else { throw ValidationError.invalidPhase }
         self.remote = remote; self.samples = samples; self.interval = interval
         self.includePrivate = includePrivate
+        self.capturePhase = capturePhase; self.redactionScope = redactionScope ?? DiagnosticRedactionScope()
     }
 }
 
@@ -57,10 +62,12 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
     /// Native startup can call this to discover/select the allowed executable
     /// automatically. The raw selection stays out of the redacted report.
     public func inspect(_ options: DiagnosticOptions) async -> DiagnosticCollection {
-        var redactor = ReportRedactor(includePrivate: options.includePrivate)
-        var report = DiagnosticReport(schemaVersion: 1, collectedAt: Self.timestamp(), platform: platform,
+        let redactor = ScopedReportRedactor(scope: options.redactionScope, includePrivate: options.includePrivate)
+        var report = DiagnosticReport(schemaVersion: 2, collectedAt: Self.timestamp(), platform: platform,
             privateDetailsIncluded: options.includePrivate,
             remoteFilter: options.remote.map { redactor.address($0.value) })
+        report.capturePhase = options.capturePhase
+        report.redactionScopeID = options.redactionScope.id
         guard platform == "macOS" else {
             report.limitations = ["macOS is required to inspect proxyd, Apple's firewall and Screen Sharing sockets."]
             let discovery = ProxydDiscoveryResult(status: .unsupportedPlatform, candidates: [], selected: nil,
@@ -74,6 +81,8 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             "A manifest is configuration evidence, not proof that its service is running or supports forwarding.",
             "UDP purpose, media negotiation and successful presentation require a separate two-Mac experiment.",
             "Unconnected UDP sockets have no known peer; they are included as unattributed listeners, not identified session traffic.",
+            "Process names, port hints and entitlements are candidates, not proof of media use. Socket delegation can make firewall attribution differ from lsof's owner.",
+            "Local host preferences are not the remote Mac's settings or a measurement of the active session's UDP base. No packet contents are collected.",
         ]
         if options.remote == nil {
             report.limitations.append("No remote IP filter supplied: unknown process names may own unreported session sockets.")
@@ -87,9 +96,11 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             ("firewallSignedApps", CommandSpec(firewall, ["--getallowsigned"])),
             ("firewallApplications", CommandSpec(firewall, ["--listapps"])),
             ("proxydManualLocation", CommandSpec("/usr/bin/man", ["-w", "proxyd"])),
+            ("hostMediaPreference", CommandSpec("/usr/bin/defaults", ["read", "com.apple.ScreenSharingServer", "hostSettings"], outputLimit: 65_536)),
         ]
         var firewallEntries: [FirewallEntry] = []
         var candidates: [String: Set<String>] = [:]
+        var components = Dictionary(uniqueKeysWithValues: PerformanceComponent.knownExecutables.map { ($0, Set(["knownSystemLocation"])) })
         var blockAll = "unknown"
         for (name, spec) in initial {
             if Task.isCancelled { break }
@@ -114,6 +125,9 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                     for entry in firewallEntries {
                         report.firewallEntries.append(.init(executable: redactor.path(entry.path), listedRule: entry.rule.rawValue))
                         if CandidateNames.isProxyd(entry.path) { candidates[entry.path, default: []].insert("firewallList") }
+                        if PerformanceComponent.role(entry.path) != nil && PerformanceComponent.enclosingBundle(entry.path) != entry.path {
+                            components[entry.path, default: []].insert("firewallList")
+                        }
                     }
                 case "firewallBlockAll":
                     blockAll = FirewallParser.blockAll(result.text)
@@ -126,9 +140,14 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                 case "proxydManualLocation":
                     let paths = result.text.split(separator: "\n").map(String.init).filter { $0.hasPrefix("/") }
                     value = paths.map { redactor.path($0) }.joined(separator: "\n")
+                case "hostMediaPreference":
+                    report.mediaPortConfiguration.observedHostPreferenceUDPBase = PerformanceEvidence.portBase(result.output)
+                    report.mediaPortConfiguration.preferenceStatus = report.mediaPortConfiguration.observedHostPreferenceUDPBase == nil
+                        ? "noValidPortBaseInVisibleValue" : "observed"
                 default: break
                 }
             }
+            if name == "hostMediaPreference" && !result.complete { report.mediaPortConfiguration.preferenceStatus = "unavailableOrIncomplete" }
             report.probes.append(Self.summary(name, result, value: value))
         }
 
@@ -147,6 +166,22 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             for identity in afterMap.values where CandidateNames.isProxyd(identity.executable) {
                 candidates[identity.executable, default: []].insert("processSnapshot")
             }
+            var processes: [DiagnosticReport.ProcessSummary] = []
+            for pid in Set(beforeMap.keys).union(afterMap.keys).sorted() {
+                // Retain transitions as well as stable identities, including processes
+                // without visible sockets. PID reuse never becomes stable ownership.
+                let identities = [beforeMap[pid], afterMap[pid]].compactMap { $0 }
+                for (offset, identity) in identities.enumerated() {
+                    let stable = beforeMap[pid] != nil && beforeMap[pid] == afterMap[pid]
+                    if stable && offset > 0 { continue }
+                    guard let role = PerformanceComponent.role(identity.executable)
+                        ?? (CandidateNames.isProxyd(identity.executable) ? "proxyCandidate" : nil) else { continue }
+                    if role != "proxyCandidate" { components[identity.executable, default: []].insert("processSnapshot") }
+                    let observation = stable ? "beforeAndAfter" : (beforeMap[pid] == identity ? "beforeOnly" : "afterOnly")
+                    processes.append(.init(pid: pid, executable: redactor.path(identity.executable), startedAt: identity.started,
+                        roleHint: role, observation: observation))
+                }
+            }
             // lsof exit 1 can mean no matches OR an error. Preserve it as an
             // incomplete observation, never as proof that no sockets exist.
             let parsed = LsofParser.parse(sockets.output)
@@ -155,9 +190,14 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                 let identity = beforeMap[socket.pid]
                 let stable = identity != nil && identity == afterMap[socket.pid]
                 let path = stable ? identity?.executable : nil
+                var hints: [String] = []
+                if PerformanceEvidence.portMatches(socket, base: 5900) { hints.append("documentedDefaultPortRange") }
+                if let base = report.mediaPortConfiguration.observedHostPreferenceUDPBase,
+                   socket.transport == "UDP", PerformanceEvidence.portMatches(socket, base: base) { hints.append("localHostPreferencePortRange") }
                 let selection: String
                 if CandidateNames.relevant(path ?? socket.command) { selection = "namedCandidate" }
                 else if options.remote.map({ socket.remote?.address == $0.value }) == true { selection = "remotePeerMatch" }
+                else if !hints.isEmpty { selection = "portHint" }
                 else if socket.transport == "UDP" && socket.remote == nil { selection = "unattributedUDPListener" }
                 else { continue }
                 selected.append(.init(pid: socket.pid, executable: path.map { redactor.path($0) },
@@ -166,12 +206,14 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                     descriptor: socket.descriptor, transport: socket.transport, family: socket.family,
                     localAddress: redactor.address(socket.local.address), localPort: socket.local.port,
                     remoteAddress: socket.remote.map { redactor.address($0.address) },
-                    remotePort: socket.remote?.port, state: socket.state))
+                    remotePort: socket.remote?.port, state: socket.state,
+                    localAddressKind: PerformanceEvidence.addressKind(socket.local.address),
+                    remoteAddressKind: socket.remote.map { PerformanceEvidence.addressKind($0.address) }, portHints: hints))
             }
             report.samples.append(.init(index: index, startedAt: started,
                 complete: before.complete && sockets.complete && after.complete && parsed.unparsedRecords == 0
                     && before.errorOutput.isEmpty && sockets.errorOutput.isEmpty && after.errorOutput.isEmpty,
-                unparsedRecords: parsed.unparsedRecords, sockets: selected))
+                unparsedRecords: parsed.unparsedRecords, sockets: selected, processes: processes))
             if index + 1 < options.samples {
                 do { try await Task.sleep(for: .seconds(options.interval)) } catch { break }
             }
@@ -181,7 +223,8 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             let manifests = Self.manifests(candidatePaths: Set(candidates.keys))
             for item in manifests.items {
                 if let program = item.program, program.hasPrefix("/") {
-                    candidates[program, default: []].insert("serviceManifest")
+                    if CandidateNames.isProxyd(program) { candidates[program, default: []].insert("serviceManifest") }
+                    if PerformanceComponent.role(program) != nil { components[program, default: []].insert("serviceManifest") }
                 } else if item.program != nil {
                     report.limitations.append("A candidate service has a relative program name; its executable path remains unresolved.")
                 }
@@ -189,6 +232,43 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                     program: item.program.map { redactor.path($0) }, machServices: item.machServices, socketNames: item.socketNames))
             }
             if !manifests.complete { report.limitations.append("Some launchd manifests were unreadable, oversized or beyond the scan limit.") }
+        }
+        if components.count > 16 { report.limitations.append("Only the first sixteen performance component paths were inspected.") }
+        for path in components.keys.sorted().prefix(16) {
+            if Task.isCancelled { break }
+            let executable = executableInspector.inspect(path)
+            var checks: [DiagnosticReport.ComponentFirewallCheck] = []
+            var targets = [(path, "executable")]
+            if let bundle = PerformanceComponent.enclosingBundle(path) { targets.append((bundle, "enclosingBundle")) }
+            for (target, kind) in targets {
+                let rules = Set(firewallEntries.filter { $0.path == target }.map(\.rule))
+                let listed = rules.count == 1 ? rules.first! : .unknown
+                var queried = FirewallRule.unknown
+                if executable.accessible && !Task.isCancelled {
+                    let result = await runner.run(CommandSpec(firewall, ["--getappblocked", target]))
+                    report.probes.append(Self.summary("component.\(redactor.path(target)).incomingRule", result))
+                    if result.complete { queried = FirewallParser.queriedRule(result.text) }
+                }
+                checks.append(.init(target: redactor.path(target), targetKind: kind, listedRule: listed.rawValue, queriedRule: queried.rawValue))
+            }
+            var signingIdentifier: String?, signatureVerified: Bool?, delegated: Bool?
+            if executable.accessible && !Task.isCancelled {
+                let verify = await runner.run(CommandSpec("/usr/bin/codesign", ["--verify", "--strict", path]))
+                let identity = await runner.run(CommandSpec("/usr/bin/codesign", ["--display", "--verbose=2", path]))
+                let entitlements = await runner.run(CommandSpec("/usr/bin/codesign", ["--display", "--entitlements", ":-", path], outputLimit: 65_536))
+                report.probes += [Self.summary("component.\(redactor.path(path)).signature", verify),
+                                  Self.summary("component.\(redactor.path(path)).identity", identity),
+                                  Self.summary("component.\(redactor.path(path)).entitlements", entitlements)]
+                signatureVerified = verify.outcome == .exited ? verify.succeeded : nil
+                if identity.complete {
+                    signingIdentifier = String(decoding: identity.errorOutput, as: UTF8.self).split(separator: "\n")
+                        .first { $0.hasPrefix("Identifier=") }.map { String($0.dropFirst("Identifier=".count)) }
+                }
+                if entitlements.complete { delegated = PerformanceEvidence.socketDelegationEntitlement(entitlements.output) }
+            }
+            report.components.append(.init(executable: redactor.path(path), roleHint: PerformanceComponent.role(path) ?? "unknown",
+                sources: components[path]!.sorted(), executableAccessible: executable.accessible, firewallChecks: checks,
+                signingIdentifier: signingIdentifier, signatureVerified: signatureVerified, socketDelegationEntitlement: delegated))
         }
         if candidates.count > 8 { report.limitations.append("Only the first eight candidate executables were inspected.") }
         var inspected: [ProxyCandidate] = []
@@ -268,6 +348,14 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                     items.append(item)
                 }
             }
+        }
+        // This agent's manifest is outside the normal *.plist directories in the
+        // researched server binary. Absence is expected on some macOS versions.
+        let agentPath = "/private/etc/com.apple.screensharing.agent.launchd"
+        if manager.fileExists(atPath: agentPath) {
+            if let data = readManifest(agentPath), let item = ServiceManifestParser.parse(data, path: agentPath, candidatePaths: candidatePaths) {
+                items.append(item)
+            } else { complete = false }
         }
         return (items, complete)
     }

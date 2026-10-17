@@ -1,39 +1,61 @@
 # Transport findings
 
-Status on 2026-10-17: **backend undecided; live experiment pending**.
+Status on 2026-10-17: **documented transport and server-side address derivation
+identified; backend selection and a live relay experiment remain pending**.
 
-The user recalls that `proxyd`, not `/usr/bin/python3`, is permitted to receive
-incoming connections on the viewer. The user prefers a viewer-only installation.
-Neither the executable's exact identity nor a supported forwarding API has been
-observed on a Mac in this session.
+See [the service and transport research](HIGH_PERFORMANCE_RESEARCH.md) for pinned
+sources, attachment hashes, disassembly evidence and the concrete experiment.
+The earlier generic TCP/UDP hypothesis was insufficient as a transport design.
 
-The working transport hypothesis includes an RFB control path, UDP media and
-feedback. A TCP 5900 relay alone is insufficient evidence of a complete High
-Performance session. The actual flow and current failure's cause still need
-to be established on the viewer and remote Macs.
+Established by Apple documentation:
 
-The current machine is Debian Linux x86_64. The new Swift diagnostic collector
-has been built here, with macOS-shaped **synthetic fixtures** used to test its
-parsing, redaction and partial-evidence behavior. Its macOS commands have not
-been run on the actual viewer. A denied read of the GitHub API added no evidence
-about Apple's `proxyd`; no inference is made from that network restriction.
+- Initial RFB control uses TCP 5900 by default.
+- High Performance requires bidirectional UDP 5900–5902. Apple's port reference
+  identifies RTP/RTCP on these ports.
+- Managed `PortBase` changes the UDP base independently of the initial TCP port.
+  A different TCP listener does not automatically remap media.
+
+Established in supplied macOS 26.7.1 (25G241) files from a separate unblocked Mac:
+
+- `screensharingd` handles server control and dispatches media configuration to
+  the session agent. Its media setup reads TCP local/peer IP addresses, assigns
+  the configured UDP base to both, and sends the configuration through agent IPC.
+- `avconferenced` has a small feature-gated entry point into private AVConference;
+  its presence does not establish that it owns the affected session's sockets.
+- Its embedded socket-delegation entitlement makes effective network identity
+  worth checking alongside the process that holds a descriptor.
+
+Independent implementation evidence identifies HEVC video/AAC audio over SRTP,
+with feedback multiplexed on media ports. We have not reproduced its live
+measurements. An opaque Python relay should carry the complete TCP stream and
+UDP datagrams both ways while Apple retains authentication and media processing.
+
+The server's endpoint derivation makes a viewer-only, address-separated local
+relay worth testing. Native-viewer binding behavior, source-tuple acceptance,
+port conflicts and actual filtering still determine whether it works.
 
 | Question | Current answer |
 | --- | --- |
-| Exact viewer/remote macOS builds | Not collected |
-| Allowed executable path / signing identity | Not collected |
+| Uploaded binary origin | Separate unblocked Mac; user reports 26.7.1 (25G241); metadata says SDK/minimum 26.7 |
+| Affected viewer/remote OS builds | Not collected |
+| Allowed `proxyd` path / interface | Not collected; neither attachment establishes it |
 | Actual filter and effective rule | User-reported restriction; not reproduced |
-| Documented `proxyd` interface | Unknown |
-| Receiving socket owner(s) | Not collected |
-| Media/feedback endpoint negotiation | Unknown |
-| Loopback delivery and source-tuple compatibility | Not tested |
+| Receiving socket owner(s) | Not collected on the affected viewer |
+| Server media address derivation | TCP local/peer IPs with configured UDP base, confirmed in supplied daemon |
+| Viewer binding / source validation | Not established; native client not supplied |
+| Loopback delivery and socket coexistence | Not tested |
 | Complete High Performance session via relay | Not tested |
 
-Next action: run the collector described in `DIAGNOSTICS.md` on the viewer with
-the failing session active. It records evidence without changing the network.
-Then investigate the exact service and run the plan's controlled experiment.
-Create `docs/adr/0001-transport.md` only when evidence supports a real choice.
+The user prefers viewer-only installation and recalls `proxyd`, rather than
+Python, as the allowed executable. Python cannot acquire another process's
+allowance by being launched by it. Identify the permitted socket owner and its
+supported interface before selecting the backend.
 
-The portable protocol/lifecycle code controls a future **app-owned adapter**.
-It is not a protocol for Apple's daemon and does not grant permission to stop,
-reconfigure or replace that service.
+Next: obtain the viewer report when available, resolve native-client bindings
+and the permitted process, then run the address-separated relay experiment in
+the research note. No daemon execution, firewall changes or live forwarding
+were performed during this research. Create `docs/adr/0001-transport.md` only
+after a complete data path is demonstrated.
+
+The existing protocol/lifecycle code controls a future app-owned adapter. It is
+not a protocol for Apple's daemon and grants no ability to reconfigure it.

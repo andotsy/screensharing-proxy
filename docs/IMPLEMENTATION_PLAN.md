@@ -1,7 +1,9 @@
 # Screen Sharing Proxy — implementation plan
 
 Planning date: 2026-10-17. Status: first infrastructure implementation completed;
-transport experiment pending. See `HANDOFF.md` for the current implementation.
+transport experiment pending. Native diagnostic app alpha 2 is published.
+See `HANDOFF.md` for implementation and `HIGH_PERFORMANCE_RESEARCH.md` for the
+subsequent Apple-documentation and macOS 26.7.1 binary research.
 
 The user subsequently authorized implementation on the current model, beginning
 with complex infrastructure. Simpler UI/distribution work may move to
@@ -49,13 +51,13 @@ public relay service is planned.
 
 | Item | Evidence / conclusion |
 | --- | --- |
-| Native UI and release design | A native settings panel and independently built diagnostic DMG are planned. |
-| High Performance transport | Working hypothesis: separate control, UDP media and feedback paths. The actual flows still need to be observed. |
-| Port 5900 | A normal starting point for RFB/TCP control; not a complete High Performance transport specification. Actual flows must be observed. |
+| Native UI and release design | Native diagnostic app and DMG are published as alpha 2. |
+| High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. Independent implementation identifies encrypted media with feedback multiplexed on media ports. Target-session flows remain unmeasured. |
+| Media addressing | Supplied server derives local/peer IPs from TCP and initializes media ports from managed `portBase` (default 5900). Viewer binding behavior remains unknown. |
 | Firewall problem | Reported by the user; not independently reproduced. The exact firewall implementation and receiving executable remain to be identified. |
 | Allowed process | The user recalls that `proxyd`, rather than `/usr/bin/python3`, is allowed. Its exact identity, supported interfaces and actual permission are unconfirmed. |
-| Development host | This cloud machine is Debian Linux x86_64. Python is available; Swift/Xcode and macOS frameworks are not. |
-| Current application state | A diagnostic CLI, portable process/protocol/lifecycle core and tests exist. No relay backend, GUI or successful proxy session has been demonstrated. |
+| Development host | Debian Linux x86_64 with verified Swift 6.2 and Python. Native builds/app smoke tests run on GitHub macOS CI. |
+| Current application state | Native diagnostic GUI/CLI, portable process/protocol/lifecycle core and 55 tests exist. No functioning relay or successful proxied session is established. |
 
 **Do not design around an assumed TCP-only solution.** TCP forwarding may carry
 login/control while video or feedback continues directly to a blocked UDP socket.
@@ -75,9 +77,12 @@ clean Mac. Some installations depend on Command Line Tools or expose a launcher
 stub. A bundled Python or a Swift helper would have a different identity and
 cannot silently substitute for the reportedly permitted executable.
 
-Do not hardcode UDP 5900–5902, assume that global HTTP/SOCKS proxy settings affect
-Screen Sharing, or assume the receiving process is named `screensharingd` on the
-viewer. The client, an agent, or a media service may own the relevant sockets.
+Use documented UDP 5900–5902 as the default investigation range, while checking
+the managed UDP base and actual session tuples. Do not assume global HTTP/SOCKS
+proxy settings affect Screen Sharing or that `screensharingd` receives the media
+on the viewer. The client, an agent or a media service may hold those sockets.
+AVConference can have socket-delegation privileges, so descriptor ownership alone
+is insufficient evidence of the identity evaluated by a network filter.
 
 ## 3. First milestone: prove the complete network path
 
@@ -146,6 +151,11 @@ to the remote's observed control port (normally TCP 5900). Port 5900 is not
 privileged, but may already be occupied. Never evict an existing listener.
 Verify that connecting Apple's client to a custom loopback endpoint still offers
 High Performance mode and authenticates the intended remote identity.
+
+The subsequent static research identifies server-side media addresses derived
+from the TCP endpoints and a shared UDP base. Begin with the address-separated
+local relay hypothesis in `HIGH_PERFORMANCE_RESEARCH.md`; verify the native
+viewer side before assuming encrypted offer rewriting is necessary.
 
 For media, establish all of the following before calling the design viable:
 

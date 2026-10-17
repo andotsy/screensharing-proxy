@@ -17,6 +17,7 @@ struct ProxyDiagnostics {
             let discoveryOnly = args.first == "discover"
             var remote: IPAddress?, samples = discoveryOnly ? 1 : 3, interval = 1.0, includePrivate = false
             var output: String?
+            var phase = "snapshot"
             var index = 1
             var seen: Set<String> = []
             while index < args.count {
@@ -36,11 +37,12 @@ struct ProxyDiagnostics {
                     guard let parsed = Double(value) else { throw CLIError("--interval requires seconds.") }
                     interval = parsed
                 case "--output": output = value
+                case "--phase": phase = value
                 default: throw CLIError("Unknown option: \(flag)")
                 }
                 index += 2
             }
-            let options = try DiagnosticOptions(remote: remote, samples: samples, interval: interval, includePrivate: includePrivate)
+            let options = try DiagnosticOptions(remote: remote, samples: samples, interval: interval, includePrivate: includePrivate, capturePhase: phase)
             // Ignore only in the CLI and handle via a Dispatch source. The runner
             // restores normal signal disposition for every child it creates.
             signal(SIGINT, SIG_IGN)
@@ -87,12 +89,14 @@ struct ProxyDiagnostics {
       --remote IP          Match sockets for this numeric remote IP, including unknown process names.
       --samples N          Socket snapshots, 1...10 (default 3).
       --interval SECONDS   Pause between snapshots, 0.2...5 (default 1).
+      --phase NAME         Label as snapshot (default), baseline, or duringSession.
       --output PATH        Create a new owner-only JSON report; otherwise write to stdout.
       --include-private    Include private addresses and full executable paths.
 
     Reports redact private addresses/paths by default. No packet payloads, process
     arguments or environment variables are collected. Ctrl-C writes a partial report.
     A report is diagnostic evidence, not proof of High Performance relay readiness.
+    Use the app for paired captures with comparable redacted address/path tokens.
     Exit codes: 0 collected/selected, 2 unsupported platform, 3 discovery unresolved,
     64 invalid invocation/output error, 130 interrupted (partial report).
     """

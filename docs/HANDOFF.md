@@ -57,6 +57,21 @@ another start. `stopped` acknowledges a request; it never substitutes for the OS
 termination event. Counters are cumulative within one session identifier. Error
 codes are structured; private paths and raw stderr do not belong in wire messages.
 
+Static transport research was completed on the supplied files from a separate
+unblocked macOS 26.7.1 (25G241) Mac. Read `HIGH_PERFORMANCE_RESEARCH.md` before
+backend work. Apple documents UDP 5900–5902 RTP/RTCP; the supplied daemon derives
+media IPs from TCP endpoints and initializes ports from `portBase`. An opaque
+address-separated relay is now a concrete experiment, with native-viewer binding
+and actual filter attribution still unresolved. The uploaded `avconferenced` is
+a feature-gated entry point; its private framework implementation was not supplied.
+
+Alpha 3 adds schema-2 performance component/process/binding evidence and visible
+`com.apple.ScreenSharingServer` host preferences. The native app exports a
+schema-1 paired envelope with `baseline` and `duringSession`, sharing a redaction
+scope, remote IP and privacy setting. See `DIAGNOSTICS.md` for interpretation.
+The `codesign` socket-delegation boolean is capability evidence, not effective
+socket attribution. No user payloads or uploaded binaries are in the repository.
+
 Next work, in order:
 
 1. Run `screensharing-proxy-diagnose` on the viewer Mac and inspect the identified
@@ -86,7 +101,7 @@ The toolchain lives outside the checkout in `/workspace/.toolchains/`; caches
 are under `/workspace/.cache/`. `HOME` is unchanged. No external Swift dependencies
 are declared. macOS builds use the local Xcode toolchain directly.
 
-Portable validation: 47 Swift Testing tests in seven suites pass with warnings
+Portable validation: 55 Swift Testing tests in eight suites pass with warnings
 as errors, covering the core and the app's serial collection/cancellation state
 and private atomic report writer. The app target is macOS-only; its real window,
 automatic discovery and report export are exercised by `Scripts/smoke-app.py` in
@@ -96,7 +111,8 @@ that transport works.
 
 `v0.1.0-alpha.1` is the published standalone CLI diagnostic alpha.
 `v0.1.0-alpha.2` adds a native diagnostic `.app` and new DMG; confirm publication in
-GitHub Releases rather than inferring it from a tag. Published assets are never
+GitHub Releases rather than inferring it from a tag. Alpha 3 adds the expanded
+performance diagnostics and paired-capture workflow. Published assets are never
 replaced under the same version. The user authorized commits and releases.
 Other workspace repositories remain read-only. No firewall/display changes or
 running network relay have been made by this implementation.

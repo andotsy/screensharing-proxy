@@ -12,18 +12,27 @@ enum NativeEntry {
         if arguments.count == 2, arguments[0] == "--smoke-test" {
             runSmokeTest(output: arguments[1]); return
         }
+        if arguments.count == 2, arguments[0] == "--smoke-pair" {
+            runSmokeTest(output: arguments[1], paired: true); return
+        }
         NativeProxyApp.main()
     }
 
-    private static func runSmokeTest(output: String) {
+    private static func runSmokeTest(output: String, paired: Bool = false) {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let model = DiagnosticsModel()
         let panel = PanelController(model: model)
         panel.show()
-        model.discover()
+        if paired { model.captureBaseline() } else { model.discover() }
         Task {
             await model.waitForCompletion()
+            if paired {
+                guard model.hasBaseline else { exit(1) }
+                model.captureSession()
+                await model.waitForCompletion()
+                guard model.sessionReport != nil else { exit(1) }
+            }
             guard panel.hasVisibleContent, let data = model.reportData,
                   model.collection?.report.platform == "macOS",
                   model.collection?.report.probes.isEmpty == false else {
@@ -32,7 +41,7 @@ enum NativeEntry {
             }
             do {
                 try PrivateReportWriter.write(data, to: URL(fileURLWithPath: output))
-                print("Native window and automatic discovery passed.")
+                print(paired ? "Native paired capture passed." : "Native window and automatic discovery passed.")
                 app.terminate(nil)
             } catch {
                 FileHandle.standardError.write(Data("Native app report export failed.\n".utf8))

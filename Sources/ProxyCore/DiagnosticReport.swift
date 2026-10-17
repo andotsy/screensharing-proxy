@@ -7,12 +7,16 @@ public struct DiagnosticReport: Sendable, Encodable {
     public let platform: String
     public let privateDetailsIncluded: Bool
     public let remoteFilter: String?
+    public var redactionScopeID: String?
+    public var capturePhase = "snapshot"
     public var probes: [ProbeSummary] = []
     public var firewallState = "unknown"
     public var firewallEntries: [FirewallSummary] = []
     public var candidates: [CandidateSummary] = []
     public var proxyDiscovery: DiscoverySummary?
     public var services: [ServiceSummary] = []
+    public var components: [ComponentSummary] = []
+    public var mediaPortConfiguration = MediaPortConfiguration()
     public var samples: [SocketSample] = []
     public var limitations: [String] = []
     // Deliberately cannot be promoted by traffic counts or an allow entry.
@@ -56,12 +60,45 @@ public struct DiagnosticReport: Sendable, Encodable {
         public let machServices: [String]
         public let socketNames: [String]
     }
+    public struct MediaPortConfiguration: Sendable, Encodable {
+        public let documentedDefaultUDPBase = 5900
+        public var observedHostPreferenceUDPBase: UInt16?
+        public var preferenceStatus = "notChecked"
+        public let preferenceDomain = "com.apple.ScreenSharingServer"
+        public let preferenceKey = "hostSettings.portBase"
+        public let preferenceScope = "localPreferencesVisibleToCollectingUser"
+        public let activeSessionUDPBase = "unknown"
+    }
+    public struct ComponentSummary: Sendable, Codable {
+        public let executable: String
+        public let roleHint: String
+        public let sources: [String]
+        public let executableAccessible: Bool
+        public let firewallChecks: [ComponentFirewallCheck]
+        public let signingIdentifier: String?
+        public let signatureVerified: Bool?
+        public let socketDelegationEntitlement: Bool?
+    }
+    public struct ComponentFirewallCheck: Sendable, Codable {
+        public let target: String
+        public let targetKind: String
+        public let listedRule: String
+        public let queriedRule: String
+    }
+    public struct ProcessSummary: Sendable, Codable {
+        public let pid: Int32
+        public let executable: String
+        public let startedAt: String
+        public let roleHint: String
+        public let observation: String
+    }
     public struct SocketSample: Sendable, Codable {
         public let index: Int
         public let startedAt: String
         public let complete: Bool
         public let unparsedRecords: Int
         public let sockets: [SocketSummary]
+        public var processes: [ProcessSummary] = []
     }
     public struct SocketSummary: Sendable, Codable {
         public let pid: Int32
@@ -76,6 +113,9 @@ public struct DiagnosticReport: Sendable, Encodable {
         public let remoteAddress: String?
         public let remotePort: UInt16?
         public let state: String?
+        public var localAddressKind = "unknown"
+        public var remoteAddressKind: String?
+        public var portHints: [String] = []
     }
 
     public func json() throws -> Data {

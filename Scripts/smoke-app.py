@@ -30,6 +30,20 @@ def main():
         assert data["privateDetailsIncluded"] is False
         assert data["highPerformanceRelay"] == "notVerified"
         assert stat.S_IMODE(report.stat().st_mode) == 0o600
+        pair_path = Path(temporary) / "pair.json"
+        pair_run = subprocess.run([str(binary), "--smoke-pair", str(pair_path)], capture_output=True, text=True, timeout=120)
+        assert pair_run.returncode == 0, pair_run.stdout + pair_run.stderr
+        pair = json.loads(pair_path.read_text())
+        assert pair["kind"] == "screenSharingCapturePair"
+        before, during = pair["baseline"], pair["duringSession"]
+        assert before["capturePhase"] == "baseline" and during["capturePhase"] == "duringSession"
+        assert before["redactionScopeID"] == during["redactionScopeID"]
+        assert len(before["samples"]) == 3 and len(during["samples"]) == 10
+        for capture in (before, during):
+            assert capture["schemaVersion"] == 2 and capture["components"]
+            assert capture["mediaPortConfiguration"]["activeSessionUDPBase"] == "unknown"
+            assert not capture["privateDetailsIncluded"]
+        assert stat.S_IMODE(pair_path.stat().st_mode) == 0o600
     print("Native app window, discovery, resources, signature and export passed.")
 
 

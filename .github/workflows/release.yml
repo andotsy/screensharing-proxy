@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing app alpha tag (for example v0.1.0-alpha.2)'
+        description: 'Existing app alpha tag (for example v0.1.0-alpha.3)'
         required: true
         type: string
 

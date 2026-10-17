@@ -18,16 +18,19 @@ def main():
     version = run("--version")
     assert version.returncode == 0 and version.stdout.startswith("screensharing-proxy-diagnose ")
     assert run("collect", "--remote", "invalid.example").returncode == 64
+    assert run("collect", "--phase", "invalid").returncode == 64
 
     with tempfile.TemporaryDirectory(prefix="ssp-cli-") as temporary:
         report_path = Path(temporary) / "report.json"
-        result = run("discover", "--output", str(report_path))
+        result = run("discover", "--phase", "baseline", "--output", str(report_path))
         if sys.platform == "darwin":
             assert result.returncode in (0, 3), result.stderr
         else:
             assert result.returncode == 2, result.stderr
         report = json.loads(report_path.read_text())
         assert report["highPerformanceRelay"] == "notVerified"
+        assert report["schemaVersion"] == 2 and report["capturePhase"] == "baseline"
+        assert report["redactionScopeID"]
         assert report["toolVersion"] == version.stdout.strip().split(" ", 1)[1]
         assert stat.S_IMODE(report_path.stat().st_mode) == 0o600
         if sys.platform == "darwin":
