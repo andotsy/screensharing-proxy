@@ -3,11 +3,13 @@ import ProxyAppSupport
 import ProxyCore
 import UniformTypeIdentifiers
 
-final class ArchiveSavePanel: DiagnosticArchiveSaving {
+final class ArchiveSavePanel: NSObject, DiagnosticArchiveSaving {
     weak var parentWindow: NSWindow?
     var smokeDestination: URL?
     private(set) var presented = false
     private var activePanel: NSSavePanel?
+    private var smokeTimer: Timer?
+    private var smokeDeadline: ContinuousClock.Instant?
 
     func save(_ data: Data) async -> DiagnosticSaveResult {
         smokeLog("Save requested")
@@ -24,6 +26,8 @@ final class ArchiveSavePanel: DiagnosticArchiveSaving {
         return await withCheckedContinuation { continuation in
             let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 self?.smokeLog(response == .OK ? "Save confirmed" : "Save cancelled")
+                self?.smokeTimer?.invalidate()
+                self?.smokeTimer = nil
                 self?.activePanel = nil
                 guard response == .OK, let url = panel.url else {
                     continuation.resume(returning: .cancelled); return
@@ -38,22 +42,28 @@ final class ArchiveSavePanel: DiagnosticArchiveSaving {
             else { panel.begin(completionHandler: completion) }
             presented = true
             smokeLog("Save sheet presented")
-            // Exercise the actual sheet and its normal OK action in hosted CI.
-            // The test supplies a fresh path inside its own temporary directory.
+            // AppKit's remote save-panel service can enter a nested event loop
+            // during OK. Dispatch from the run loop, like a user event, rather
+            // than holding Swift's main-actor dispatch queue across that loop.
             if smokeDestination != nil {
-                Task {
-                    let deadline = ContinuousClock.now.advanced(by: .seconds(20))
-                    while activePanel === panel && ContinuousClock.now < deadline {
-                        try? await Task.sleep(for: .milliseconds(500))
-                        if panel.isVisible {
-                            panel.makeFirstResponder(nil)
-                            smokeLog("Accepting visible save sheet")
-                            panel.ok(nil)
-                        }
-                    }
-                    if activePanel === panel { smokeLog("Save sheet timed out"); panel.cancel(nil) }
-                }
+                smokeDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+                let timer = Timer(timeInterval: 0.5, target: self,
+                                  selector: #selector(acceptSmokePanel(_:)), userInfo: nil, repeats: true)
+                smokeTimer = timer
+                RunLoop.main.add(timer, forMode: .common)
             }
+        }
+    }
+    @objc private func acceptSmokePanel(_ timer: Timer) {
+        guard let panel = activePanel else { timer.invalidate(); return }
+        if let smokeDeadline, ContinuousClock.now >= smokeDeadline {
+            timer.invalidate(); smokeLog("Save sheet timed out"); panel.cancel(nil)
+        } else if panel.isVisible {
+            timer.invalidate()
+            panel.makeFirstResponder(nil)
+            smokeLog("Accepting visible save sheet")
+            panel.ok(nil)
+            smokeLog("Save action returned")
         }
     }
     func cancel() { activePanel?.cancel(nil) }
