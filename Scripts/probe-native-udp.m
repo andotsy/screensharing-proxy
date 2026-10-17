@@ -35,11 +35,19 @@ static void requireCall(int value, NSString *stage) {
     }
 }
 
-int main(void) {
+int main(int argc, const char *argv[]) {
     @autoreleasepool {
         alarm(10);
         NSMutableDictionary *result = [@{@"scope": @"native UDP helper; no session"} mutableCopy];
         int route = -1, relay = -1, native = -1, injector = -1;
+        int reservedPort = 0;
+        if (argc != 1) {
+            if (argc != 3 || strcmp(argv[1], "--reserved-port") != 0) return 2;
+            char *end = NULL;
+            long value = strtol(argv[2], &end, 10);
+            if (!end || *end || value < 1024 || value > 65535) return 2;
+            reservedPort = (int)value;
+        }
         void *framework = NULL;
         @try {
             framework = dlopen("/System/Library/PrivateFrameworks/ScreenSharing.framework/Versions/A/ScreenSharing", RTLD_LAZY | RTLD_LOCAL);
@@ -63,6 +71,11 @@ int main(void) {
             close(route); route = -1;
             local.sin_port = 0;
 
+            if (reservedPort) {
+                // The test driver already started the real Ruby child. Use its
+                // reserved tuple without taking another socket at that port.
+                local.sin_port = htons((uint16_t)reservedPort);
+            } else {
             relay = socket(AF_INET, SOCK_DGRAM, 0);
             requireCall(relay, @"relay.socket");
             int enabled = 1;
@@ -73,6 +86,7 @@ int main(void) {
             requireCall(getsockname(relay, (struct sockaddr *)&local, &length), @"relay.getsockname");
             peer.sin_port = local.sin_port;
             requireCall(connect(relay, (struct sockaddr *)&peer, sizeof(peer)), @"relay.connect");
+            }
 
             SSPFixtureMediaConfig *config = [SSPFixtureMediaConfig new];
             config.remoteAddress = [SSPFixtureRemoteAddress new];

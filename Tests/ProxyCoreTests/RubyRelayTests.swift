@@ -23,6 +23,7 @@ private final class RelayEvents: @unchecked Sendable {
             #expect(!RubyRelayConfiguration.validRemoteAddress(value))
         }
         #expect(FileManager.default.fileExists(atPath: RubyRelayResources.script.path))
+        #expect(FileManager.default.fileExists(atPath: RubyRelayResources.incomingScript.path))
         let config = RubyRelayConfiguration(sessionID: UUID(), remoteAddress: "192.0.2.1")
         let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(config)) as? [String: Any])
         #expect(json["version"] as? Int == 1)

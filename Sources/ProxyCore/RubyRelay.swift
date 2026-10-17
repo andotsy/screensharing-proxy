@@ -7,7 +7,9 @@ import Glibc
 #endif
 
 public struct RubyRelayConfiguration: Encodable, Sendable {
+    public enum Mode: String, Encodable, Sendable { case addressSeparated, incoming }
     public let version = 1
+    public var mode = Mode.addressSeparated
     public let sessionID: UUID
     public let remoteAddress: String
     public var remoteControlPort: UInt16 = 5900
@@ -33,6 +35,7 @@ public struct RubyRelayConfiguration: Encodable, Sendable {
 
 public enum RubyRelayResources {
     public static var script: URL { Bundle.module.url(forResource: "relay", withExtension: "rb")! }
+    public static var incomingScript: URL { Bundle.module.url(forResource: "incoming-relay", withExtension: "rb")! }
 }
 
 public enum RubyRelayRunResult: Sendable, Equatable {
@@ -50,8 +53,8 @@ private final class RelayCancellation: @unchecked Sendable {
 /// Owns the child's stdin, stdout, process group, exit observation and reaping.
 public struct RubyRelayRunner: Sendable {
     public let executable: String
-    public let script: String
-    public init(executable: String = "/usr/bin/ruby", script: String = RubyRelayResources.script.path) {
+    public let script: String?
+    public init(executable: String = "/usr/bin/ruby", script: String? = nil) {
         self.executable = executable; self.script = script
     }
 
@@ -69,6 +72,7 @@ public struct RubyRelayRunner: Sendable {
 
     private func execute(_ configuration: RubyRelayConfiguration, cancellation: RelayCancellation,
                          onEvent: @escaping @Sendable (BackendEnvelope) -> Void) -> RubyRelayRunResult {
+        let script = script ?? (configuration.mode == .incoming ? RubyRelayResources.incomingScript : RubyRelayResources.script).path
         guard executable.hasPrefix("/"), script.hasPrefix("/"),
               !executable.utf8.contains(0), !script.utf8.contains(0),
               var input = try? JSONEncoder().encode(configuration), input.count < 4096 else {

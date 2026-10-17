@@ -22,6 +22,8 @@ jobs:
         run: |
           clang -fobjc-arc -framework Foundation Scripts/probe-native-udp.m -o "$RUNNER_TEMP/probe-native-udp"
           "$RUNNER_TEMP/probe-native-udp"
+      - name: Test the real Ruby incoming relay and Apple socket coexistence
+        run: python3 Scripts/test-incoming-relay.py --native-helper "$RUNNER_TEMP/probe-native-udp" -v
       - name: Inspect native media binding and port selection evidence
         run: |
           python3 Scripts/inspect-native-transport.py
@@ -47,7 +49,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           resources = Path('.build/native-bundle/ScreenSharingProxy.app/Contents/Resources')
-          scripts = list(resources.rglob('relay.rb'))
-          assert len(scripts) == 1
-          assert scripts[0].read_bytes() == Path('Sources/ProxyCore/Resources/relay.rb').read_bytes()
+          for name in ['relay.rb', 'incoming-relay.rb']:
+              scripts = list(resources.rglob(name))
+              assert len(scripts) == 1
+              assert scripts[0].read_bytes() == Path('Sources/ProxyCore/Resources', name).read_bytes()
           PY
