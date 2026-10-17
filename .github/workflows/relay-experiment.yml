@@ -18,6 +18,10 @@ jobs:
         run: /usr/bin/ruby --disable-gems Scripts/probe-loopback.rb
       - name: Measure native-pattern UDP reuse with synthetic loopback packets
         run: /usr/bin/ruby --disable-gems Scripts/probe-udp-reuse.rb
+      - name: Exercise the native UDP helper with local-only packet delivery
+        run: |
+          clang -fobjc-arc -framework Foundation Scripts/probe-native-udp.m -o "$RUNNER_TEMP/probe-native-udp"
+          "$RUNNER_TEMP/probe-native-udp"
       - name: Inspect native media binding and port selection evidence
         run: |
           python3 Scripts/inspect-native-transport.py
