@@ -8,16 +8,18 @@ Performance Screen Sharing.
 offline installation guide. See [installation](docs/INSTALL.md) and
 [release notes](docs/releases/0.1.0-alpha.4.md).
 
-The app opens a simple diagnostics window. Collection includes automatic
-`proxyd` discovery. One button collects diagnostics and opens a Save dialog for a redacted ZIP.
+The app opens on its **Diagnostics** tab. **Proxy** and **Settings** are visible
+but grayed out until those features are available. One button collects diagnostics
+and opens a Save dialog for a redacted ZIP. Collection includes exact `proxyd`
+discovery and separate Python/Ruby firewall candidates.
 **Traffic forwarding remains unfinished.** The permitted service's forwarding
 interface must be identified on the viewer Mac before a backend is chosen.
 
 Implemented:
 
-- One-button collection, automatic ZIP Save dialog, cancellation and save retry.
-  No settings tabs, menu bar utility, Dock preference or login startup.
-
+- Native app shell with a usable Diagnostics tab and disabled Proxy/Settings tabs.
+  One-button collection, automatic ZIP Save dialog, cancellation and save retry.
+  No active Dock preference, login startup or background menu bar utility.
 - A read-only macOS diagnostic CLI: firewall entries, executable identities,
   launchd manifest candidates, and correlated TCP/UDP socket snapshots.
 - Performance component evidence for the viewer, server, session agent and

@@ -7,7 +7,8 @@ drop from a missing packet alone.
 
 The recommended collection is the native app from alpha 4:
 
-1. Open the app on the viewer and keep the Screen Sharing connection attempt open.
+1. Open Screen Sharing Proxy on the viewer. Diagnostics is selected automatically;
+   the future Proxy and Settings tabs are disabled. Keep the connection attempt open.
 2. Click **Collect Diagnostics**. Collection takes ten socket snapshots.
 3. The Save dialog opens automatically. Save the ZIP and forward it for investigation.
 

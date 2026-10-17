@@ -92,7 +92,7 @@ jobs:
             fi
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --latest=false \
-              --title "Screen Sharing Proxy $RELEASE_TAG — native diagnostic alpha" --notes-file "$notes"
+              --title "Screen Sharing Proxy $RELEASE_TAG — native app alpha" --notes-file "$notes"
           fi
           gh release upload "$RELEASE_TAG" "dist/$DMG_NAME" dist/SHA256SUMS --clobber
           download_dir=$(mktemp -d "$RUNNER_TEMP/ssp-download.XXXXXX")

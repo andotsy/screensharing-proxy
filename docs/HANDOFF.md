@@ -117,7 +117,9 @@ replaced under the same version. The user authorized commits and releases.
 Other workspace repositories remain read-only. No firewall/display changes or
 running network relay have been made by this implementation.
 
-Alpha 4 replaces the paired/three-pane UI with one Collect Diagnostics button.
+Alpha 4 keeps the Screen Sharing Proxy app shell with Proxy, Diagnostics and
+Settings tabs. Only Diagnostics is enabled and selected; the other tabs are
+grayed out. Its content replaces the paired-capture UI with one Collect Diagnostics button.
 It collects ten snapshots, creates a ZIP (diagnostics.json + README.txt), and
 opens NSSavePanel automatically. Save cancellation/failure preserves the archive;
 collection cancellation preserves the prior archive. Closing quits and waits for

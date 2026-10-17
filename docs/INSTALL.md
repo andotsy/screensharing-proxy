@@ -6,6 +6,7 @@ Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 
 1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.
 2. Open **Screen Sharing Proxy** on the viewer Mac with the blocked service.
+   The **Diagnostics** tab is selected automatically.
 3. Keep the Screen Sharing connection attempt open and click **Collect Diagnostics**.
 4. When the Save dialog appears, choose where to save the ZIP, then send that ZIP
    to the person helping you. Private addresses and paths are hidden automatically.
@@ -13,7 +14,8 @@ Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 If you cancel the Save dialog, **Save ZIP Again…** saves the completed report
 without collecting again. Closing the window quits the app.
 
-**This is a diagnostic alpha. It does not forward Screen Sharing traffic yet.**
+**Only Diagnostics is available in this alpha. Proxy and Settings are grayed out;
+traffic forwarding is not implemented yet.**
 The app leaves firewall and display settings unchanged. It runs on demand and
 removes its own launch-at-login registration from older diagnostic alphas.
 

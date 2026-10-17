@@ -11,13 +11,15 @@ pre{overflow:auto;padding:16px;border:1px solid #728b9e;border-radius:12px;font-
 button{font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer}a{color:inherit}
 </style>
 <h1>Screen Sharing Proxy</h1>
-<p>Native diagnostic alpha · Apple silicon · macOS 14+</p>
-<p class="notice">This app automatically finds an allowed <code>proxyd</code>
-service and collects diagnostics. Traffic forwarding remains under development.
-This alpha does not relay Screen Sharing or change the firewall.</p>
+<p>Native app alpha · Apple silicon · macOS 14+</p>
+<p class="notice">The <strong>Diagnostics</strong> tab is available now;
+<strong>Proxy</strong> and <strong>Settings</strong> are grayed out.
+Reports include service discovery and Python/Ruby firewall candidates.
+Traffic forwarding remains under development. This alpha does not change the firewall.</p>
 <h2>Install and open</h2>
 <ol><li>Drag <strong>ScreenSharingProxy.app</strong> onto <strong>Applications</strong>.</li>
-<li>Open <strong>Screen Sharing Proxy</strong> on the viewer Mac with the blocked service.</li>
+<li>Open <strong>Screen Sharing Proxy</strong> on the viewer Mac with the blocked service.
+The <strong>Diagnostics</strong> tab is selected automatically.</li>
 <li>Keep the Screen Sharing connection attempt open and click <strong>Collect Diagnostics</strong>.</li>
 <li>When the Save dialog appears, choose where to save the ZIP and send it to the
 person helping you. Private addresses and paths are hidden automatically.</li></ol>
