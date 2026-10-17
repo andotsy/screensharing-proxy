@@ -20,3 +20,14 @@ jobs:
         run: |
           python3 Scripts/test-ruby-relay.py --portable
           swift test -Xswiftc -warnings-as-errors
+      - name: Build and smoke-test the signed native bundle with relay resources
+        run: |
+          bash Packaging/build-app.sh
+          python3 Scripts/smoke-app.py .build/native-bundle/ScreenSharingProxy.app
+          python3 - <<'PY'
+          from pathlib import Path
+          resources = Path('.build/native-bundle/ScreenSharingProxy.app/Contents/Resources')
+          scripts = list(resources.rglob('relay.rb'))
+          assert len(scripts) == 1
+          assert scripts[0].read_bytes() == Path('Sources/ProxyCore/Resources/relay.rb').read_bytes()
+          PY

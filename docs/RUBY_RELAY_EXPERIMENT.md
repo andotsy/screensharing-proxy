@@ -1,5 +1,9 @@
 # Ruby relay experiment
 
+Status: the transport implementation passes local tests, but the proposed native
+connection path is **blocked under the no-interface-change constraint**. It is
+not enabled in the application and is not a functioning High Performance proxy.
+
 The user selected system Ruby after the restricted Mac listed /usr/bin/ruby as
 allowed and the Python runtime as blocked. This is an experimental data path;
 only a live High Performance session can establish that Apple accepts it.
@@ -60,3 +64,36 @@ system Ruby 2.6, packaged resources and native lifecycle. Neither substitutes fo
 the restricted Mac: require High Performance video, full keyboard/mouse control,
 audio when enabled, ten minutes of changing video and reconnect with the original
 firewall rules unchanged. Runtime receipt and Apple local delivery remain gates.
+
+## Results
+
+- Ruby 2.6.10 on Linux: nine real-socket/startup tests pass, including all three
+  media ports, empty and maximum IPv4 UDP datagrams, exact source tuples, binary
+  TCP transfers larger than the bounded queues, half-close, unexpected UDP
+  senders, partial bind failure, parent-pipe EOF and socket cleanup.
+- Swift: 63 tests pass, including the new interactive process supervisor,
+  cancellation escalation, private configuration over stdin, protocol rejection
+  and media counters. The release build passes with warnings treated as errors.
+- [macOS experiment run 39066437389](https://github.com/andotsy/screensharing-proxy/actions/runs/39066437389):
+  Apple's Ruby 2.6.10 passes startup checks and the Swift suite. The full
+  distinct-address traffic fixture is intentionally skipped there; it must not
+  silently configure aliases just to make the tests pass.
+- The macOS runner binds/connects 127.0.0.1, ::1 and fe80::1%lo0, but each TCP
+  client's source address is identical to its destination. Binding 127.0.0.2,
+  127.0.0.3 or 127.0.0.4 returns EADDRNOTAVAIL. No interface configuration was
+  changed. The existing loopback addresses do not provide the separated tuples
+  required by this experiment. This is CI-host evidence, not a measurement of
+  every possible address on the user's Mac.
+
+A remote companion can separate its own native connection by binding its TCP
+source to one existing address and connecting to another existing address.
+That does not establish how to make Apple's viewer choose distinct local
+addresses: the viewer's TCP connect remains under Apple's control. Do not
+implement a companion as if it automatically removes the viewer-side collision.
+
+Do not enable a Connect button that is known to require the rejected setup, or
+publish a working-proxy claim from these transport tests. A next design must
+demonstrate native viewer media binding/port selection under unchanged interface
+configuration, or establish a separately authorized packet-delivery mechanism.
+Neither encrypted negotiation rewriting nor privileged packet injection has
+been implemented or established by this experiment.

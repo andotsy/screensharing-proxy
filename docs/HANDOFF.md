@@ -1,5 +1,15 @@
 # Implementation handoff
 
+Latest work is on `ruby-relay-experiment`. The user chose system Ruby and
+explicitly declined interface changes. `Resources/relay.rb` implements bounded
+opaque TCP forwarding and three fixed-peer UDP channels, and `RubyRelayRunner`
+adds owned stdin/EOF supervision, bounded events and stop escalation. Nine real
+Ruby traffic/startup tests pass on Linux; 63 Swift tests pass on Linux and macOS.
+The native app remains diagnostic-only: macOS CI could not bind 127.0.0.2 without
+an alias, and the user declined that setup. Read `RUBY_RELAY_EXPERIMENT.md`; do
+not assume a remote companion fixes the viewer's local socket collision. No
+interface/firewall changes or native High Performance relay have been performed.
+
 The user authorized implementation on the current model on 2026-10-17, with
 complex infrastructure first and simpler UI/distribution work later on Sol.
 

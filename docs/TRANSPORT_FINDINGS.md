@@ -1,7 +1,15 @@
 # Transport findings
 
 Status on 2026-10-17: **documented transport and server-side address derivation
-identified; backend selection and a live relay experiment remain pending**.
+identified; Ruby transport tested locally, native routing gate still closed**.
+
+The user selected system Ruby and declined interface configuration changes.
+The new [Ruby relay experiment](RUBY_RELAY_EXPERIMENT.md) forwards TCP and all
+three UDP ports in local tests, but macOS CI rejects the separate loopback
+addresses with EADDRNOTAVAIL. Its available loopback targets select the same
+source/destination address. The proposed native path therefore requires a new
+demonstrated binding mechanism under the user's constraint. It is not enabled
+in the app, and no working High Performance relay is claimed.
 
 See [the service and transport research](HIGH_PERFORMANCE_RESEARCH.md) for pinned
 sources, attachment hashes, disassembly evidence and the concrete experiment.

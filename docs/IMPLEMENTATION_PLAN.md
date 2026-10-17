@@ -5,6 +5,13 @@ transport experiment pending. Diagnostic UX is now one-button collection and aut
 See `HANDOFF.md` for implementation and `HIGH_PERFORMANCE_RESEARCH.md` for the
 subsequent Apple-documentation and macOS 26.7.1 binary research.
 
+Latest constraint: the user selected **system Ruby** and explicitly declined
+interface configuration changes, including a temporary loopback alias. The Ruby
+TCP/UDP transport experiment now passes local tests, but the separate-address
+native path is blocked on the macOS CI host without that rejected setup. Read
+`RUBY_RELAY_EXPERIMENT.md` before wiring it into the UI. The native data-path gate
+remains closed; a remote companion does not automatically fix viewer bindings.
+
 The user subsequently authorized implementation on the current model, beginning
 with complex infrastructure. Simpler UI/distribution work may move to
 gpt-6.1-sol-xhigh later. The transport design retains its mandatory feasibility

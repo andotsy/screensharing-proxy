@@ -112,12 +112,38 @@ public struct RubyRelayRunner: Sendable {
         var decoder = BackendLineDecoder(), inputOffset = 0
         var failure: BackendFailureCode?
         var ready = false, outputEOF = false
+        var frameWindow = ProcessInfo.processInfo.systemUptime, framesInWindow = 0
         let started = ProcessInfo.processInfo.systemUptime
         var stopAt: TimeInterval?, sentTERM = false, sentKILL = false
         var errorBytes = 0
         var buffer = [UInt8](repeating: 0, count: 8192)
+        func receive(_ bytes: Data) throws {
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - frameWindow >= 1 { frameWindow = now; framesInWindow = 0 }
+            for event in try decoder.feed(bytes) {
+                framesInWindow += 1
+                guard framesInWindow <= 32, event.sessionID == configuration.sessionID else {
+                    throw BackendProtocolError.invalidMessage
+                }
+                switch event.event {
+                case .ready:
+                    guard !ready else { throw BackendProtocolError.invalidMessage }
+                    ready = true
+                case .traffic, .media:
+                    guard ready else { throw BackendProtocolError.invalidMessage }
+                case let .failed(code): failure = code
+                case .stopped: break
+                }
+                onEvent(event)
+            }
+        }
         while true {
             let now = ProcessInfo.processInfo.systemUptime
+            // Check ownership before any cancellation signal. ECHILD means a
+            // foreign reaper invalidated our guarantee against PID reuse.
+            let observation = ssp_has_exited(child.pid)
+            if observation == -ECHILD { return .failed(.internalFailure) }
+            if observation < 0 { failure = .internalFailure }
             if !ready && now - started > 8 && stopAt == nil { failure = .connectionTimedOut }
             if cancellation.isCancelled || failure != nil {
                 if stopAt == nil {
@@ -145,15 +171,7 @@ public struct RubyRelayRunner: Sendable {
                     break
                 }
                 do {
-                    for event in try decoder.feed(Data(buffer.prefix(count))) {
-                        guard event.sessionID == configuration.sessionID else { throw BackendProtocolError.invalidMessage }
-                        if event.event == .ready {
-                            guard !ready else { throw BackendProtocolError.invalidMessage }
-                            ready = true
-                        }
-                        if case let .failed(code) = event.event { failure = code }
-                        onEvent(event)
-                    }
+                    try receive(Data(buffer.prefix(count)))
                 } catch { failure = .incompatibleProtocol }
             }
             for _ in 0..<8 {
@@ -163,20 +181,16 @@ public struct RubyRelayRunner: Sendable {
                 if errorBytes > 65_536 { failure = .incompatibleProtocol; break }
             }
             let exited = ssp_has_exited(child.pid)
-            if exited != 0 {
+            if exited == -ECHILD { return .failed(.internalFailure) }
+            if exited == 1 {
                 // PID is still reserved by the unreaped child. Clean descendants first.
                 _ = ssp_signal_group(child.pid, SIGKILL)
-                if exited < 0 { failure = .internalFailure }
                 // Drain final complete frames from the now-dead child.
                 for _ in 0..<16 where !outputEOF {
                     let count = read(child.output_fd, &buffer, buffer.count)
                     if count <= 0 { outputEOF = true; break }
                     do {
-                        for event in try decoder.feed(Data(buffer.prefix(count))) {
-                            guard event.sessionID == configuration.sessionID else { throw BackendProtocolError.invalidMessage }
-                            if case let .failed(code) = event.event { failure = code }
-                            onEvent(event)
-                        }
+                        try receive(Data(buffer.prefix(count)))
                     } catch { failure = .incompatibleProtocol }
                 }
                 do { try decoder.finish() } catch { failure = .incompatibleProtocol }
@@ -188,7 +202,7 @@ public struct RubyRelayRunner: Sendable {
                 return .exited(exitCode)
             }
             if outputEOF && stopAt == nil { failure = .incompatibleProtocol }
-            var descriptor = pollfd(fd: child.output_fd, events: Int16(POLLIN), revents: 0)
+            var descriptor = pollfd(fd: outputEOF ? -1 : child.output_fd, events: Int16(POLLIN), revents: 0)
             _ = poll(&descriptor, 1, 40)
         }
     }
