@@ -7,6 +7,7 @@ final class ArchiveSavePanel: NSObject, DiagnosticArchiveSaving {
     weak var parentWindow: NSWindow?
     var smokeDestination: URL?
     private(set) var presented = false
+    private(set) var smokePanelWasVisible = false
     private var activePanel: NSSavePanel?
     private var smokeTimer: Timer?
     private var smokeDeadline: ContinuousClock.Instant?
@@ -42,28 +43,28 @@ final class ArchiveSavePanel: NSObject, DiagnosticArchiveSaving {
             else { panel.begin(completionHandler: completion) }
             presented = true
             smokeLog("Save sheet presented")
-            // AppKit's remote save-panel service can enter a nested event loop
-            // during OK. Dispatch from the run loop, like a user event, rather
-            // than holding Swift's main-actor dispatch queue across that loop.
+            // Since macOS 10.15, NSSavePanel.ok(_:) cannot be called
+            // programmatically. Exercise presentation and the supported Cancel
+            // action; the smoke driver verifies ZIP writing separately.
+            // https://developer.apple.com/documentation/appkit/nssavepanel/ok(_:)
             if smokeDestination != nil {
                 smokeDeadline = ContinuousClock.now.advanced(by: .seconds(20))
                 let timer = Timer(timeInterval: 0.5, target: self,
-                                  selector: #selector(acceptSmokePanel(_:)), userInfo: nil, repeats: true)
+                                  selector: #selector(cancelSmokePanel(_:)), userInfo: nil, repeats: true)
                 smokeTimer = timer
                 RunLoop.main.add(timer, forMode: .common)
             }
         }
     }
-    @objc private func acceptSmokePanel(_ timer: Timer) {
+    @objc private func cancelSmokePanel(_ timer: Timer) {
         guard let panel = activePanel else { timer.invalidate(); return }
         if let smokeDeadline, ContinuousClock.now >= smokeDeadline {
             timer.invalidate(); smokeLog("Save sheet timed out"); panel.cancel(nil)
         } else if panel.isVisible {
             timer.invalidate()
-            panel.makeFirstResponder(nil)
-            smokeLog("Accepting visible save sheet")
-            panel.ok(nil)
-            smokeLog("Save action returned")
+            smokePanelWasVisible = true
+            smokeLog("Cancelling visible save sheet")
+            panel.cancel(nil)
         }
     }
     func cancel() { activePanel?.cancel(nil) }

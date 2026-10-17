@@ -51,14 +51,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Task {
             await model.waitForCompletion()
-            FileHandle.standardError.write(Data("Collection and save finished\n".utf8))
-            guard panel.hasVisibleContent, saver.presented,
-                  FileManager.default.fileExists(atPath: smokeDestination.path),
+            FileHandle.standardError.write(Data("Collection and save-dialog cancellation finished\n".utf8))
+            guard panel.hasVisibleContent, saver.presented, saver.smokePanelWasVisible,
+                  model.message?.hasPrefix("Not saved.") == true,
                   model.collection?.report.platform == "macOS",
-                  model.collection?.report.samples.count == 10 else {
+                  model.collection?.report.samples.count == 10, let archive = model.archiveData else {
                 FileHandle.standardError.write(Data("Native collection/save-panel check failed.\n".utf8)); exit(1)
             }
-            print("Native collection, save dialog and ZIP export passed.")
+            // Test the shared writer directly: AppKit requires a real user or
+            // accessibility-driven UI test to confirm a save, not panel.ok(_:).
+            do { try PrivateReportWriter.write(archive, to: smokeDestination, replaceExisting: false) }
+            catch { FileHandle.standardError.write(Data("Native ZIP write failed.\n".utf8)); exit(1) }
+            print("Native collection, save dialog cancellation and ZIP write passed.")
             NSApp.terminate(nil)
         }
     }

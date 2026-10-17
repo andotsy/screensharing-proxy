@@ -1,4 +1,8 @@
-"""Open a native window, collect once, accept the save sheet and inspect the ZIP."""
+"""Collect once, present/cancel the native save sheet, then test ZIP writing.
+
+AppKit disallows programmatic NSSavePanel.ok calls. This does not simulate the
+user's Save click; the production completion uses the same tested ZIP writer.
+"""
 import json
 from pathlib import Path
 import plistlib
@@ -49,7 +53,7 @@ def main():
                 process.kill()
                 process.communicate(timeout=10)
         assert process.returncode == 0, stdout + stderr
-        assert "Native collection, save dialog and ZIP export passed." in stdout
+        assert "Native collection, save dialog cancellation and ZIP write passed." in stdout
         with zipfile.ZipFile(report) as archive:
             assert archive.testzip() is None
             assert set(archive.namelist()) == {"diagnostics.json", "README.txt"}
@@ -63,7 +67,7 @@ def main():
         assert data["highPerformanceRelay"] == "notVerified"
         assert stat.S_IMODE(report.stat().st_mode) == 0o600
 
-    print("Native app window, save dialog, ZIP, resources and signature passed.")
+    print("Native window, save-dialog cancellation, ZIP writer, resources and signature passed.")
 
 
 if __name__ == "__main__":

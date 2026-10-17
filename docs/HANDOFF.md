@@ -136,3 +136,10 @@ and avconferenced wildcard UDP 5901. This establishes an observed descriptor
 owner and potential bind conflict on that Mac, not effective filter attribution
 or the affected viewer's policy. System Python/Ruby and other runtime entries
 were explicitly listed as allowed; no proxyd was found.
+
+The native smoke test presents and cancels the real Save sheet, then writes its
+collected ZIP through the shared private writer. Apple disallows programmatic
+NSSavePanel.ok calls on macOS 10.15+, so the test does not claim to simulate a
+user's Save click. Portable tests cover save outcomes, retry/cancellation, ZIP
+compatibility and atomic file writing. A manual user Save click remains an
+installed-app acceptance check.

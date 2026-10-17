@@ -50,7 +50,8 @@ def main():
         report = root / "native-report.zip"
         command = snippet.replace(app_literal, shlex.quote(str(app)))
         # Keep the guide's launch command, with a test-only argument so the
-        # launched native app exports evidence and quits after collection and saving.
+        # launched app tests collection, save-dialog cancellation and ZIP writing,
+        # then quits. AppKit disallows programmatic Save-button confirmation.
         command = command.replace('/usr/bin/open "$app"',
             '/usr/bin/open -W "$app" --args --smoke-test ' + shlex.quote(str(report)))
         script = root / "guide.zsh"
