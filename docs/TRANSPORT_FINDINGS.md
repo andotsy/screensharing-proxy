@@ -1,7 +1,10 @@
 # Transport findings
 
-Status on 2026-10-17: **documented transport and server-side address derivation
-identified; Ruby transport tested locally, native routing gate still closed**.
+Status on 2026-10-18: **incoming Ruby relay and native socket delivery tested
+locally; complete High Performance session remains unproven**. Development now
+runs on the user's native macOS 26.7.1 Mac. See the
+[AVConference follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md) for the new static
+feedback-path evidence and remaining source-acceptance limit.
 
 The user selected system Ruby and declined interface configuration changes.
 The new [Ruby relay experiment](RUBY_RELAY_EXPERIMENT.md) forwards TCP and all
@@ -17,7 +20,7 @@ an unconnected socket after its tolerated duplicate-connect error, and forward
 incoming bytes locally to that socket. The actual native helper accepts the
 local test packet on macOS 26.6.2 CI. AVConference source validation, outbound
 feedback and the restricted Mac's filter remain untested. This candidate is
-separate from the implemented address-separated relay; see the
+implemented in incoming-relay.rb, separately from the address-separated relay; see the
 [probe results and acceptance gates](RUBY_RELAY_EXPERIMENT.md#socket-reuse-and-a-different-incoming-path).
 
 See [the service and transport research](HIGH_PERFORMANCE_RESEARCH.md) for pinned
@@ -140,7 +143,7 @@ and does not prove which process identity was filtered or where packets dropped.
 | Receiving socket owner(s) | Restricted viewer: avconferenced holds connected UDP 5900 and 5901 to the TCP peer in the final two snapshots; delivery and filter identity unverified |
 | Server media address derivation | TCP local/peer IPs with configured UDP base, confirmed in supplied daemon |
 | Viewer binding / source validation | Working session: specific-address UDP 5900 and wildcard UDP 5901. Restricted attempt: specific-address connected UDP 5900 and 5901. Relay bindings and peer acceptance remain untested |
-| Loopback delivery and socket coexistence | Not tested |
+| Loopback delivery and socket coexistence | Incoming candidate passes real Ruby/native-helper socket tests on 26.6.2 CI and local 26.7.1; AVConference media acceptance is unproven |
 | Complete High Performance session via relay | Not tested |
 
 The user initially recalled proxyd as the permitted executable. Both captures now

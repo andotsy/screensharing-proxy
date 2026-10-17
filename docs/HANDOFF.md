@@ -1,5 +1,68 @@
 # Implementation handoff
 
+## Current resume point — 2026-10-18
+
+Development now runs natively on the user's Apple silicon Mac, in the local
+`screensharing-proxy` checkout for this chat. Use its installed Xcode Swift 6.3
+and `/usr/bin/ruby` 2.6.10. The former `/workspace` Linux toolchain paths below
+are historical cloud setup, not prerequisites for local macOS work. The Debian
+VM has GitHub access as andotsy if needed; it is not needed to build or test.
+Use author and committer `andotsy <143706459+andotsy@users.noreply.github.com>`.
+
+The experiment branch already included `incoming-relay.rb` at d759794. Some
+earlier paragraphs and the PR description lagged that implementation. The
+incoming relay keeps TCP/direct native feedback unchanged, reserves the network
+UDP tuples before Apple starts, and submits received datagrams locally. Its six
+native socket tests pass on this Mac, including Apple's actual UDP helper.
+
+The separate `screensharing-proxy-experiment` command now provides a bounded
+manual test through the existing Ruby supervisor. It refuses existing sockets
+and report files, stops on INT/TERM/HUP or a duration limit, reaps its child and
+saves owner-only aggregate counters without private endpoints or media bytes.
+Run `bash Packaging/build-relay-experiment.sh` for the separate development ZIP;
+see `INCOMING_EXPERIMENT_GUIDE.md`. This is not a working-proxy release, and the
+native app remains diagnostic-only.
+
+Read `AVCONFERENCE_TRANSPORT_FINDINGS.md` for new local 26.7.1 evidence: native
+AVConference contains an explicit-destination feedback path for an unconnected
+UDP socket. Source acceptance and full live media processing remain unproven;
+the framework also has source-IP matching logic whose applicability to this
+session has not been established. No private API is used by the relay or test
+command, and the live media service was not attached to or changed.
+
+Validation: 66 Swift tests, release build, six incoming-relay native tests and
+four packaged-command smoke tests pass locally. Original relay portable checks
+pass with the seven distinct-address cases explicitly skipped. Media ports were
+already occupied on this Mac; high-port fixtures preserved those sockets. A
+live session needs an identified remote Mac and a fresh native connection after
+the relay is ready. Do not stop system services to reclaim retained sockets.
+
+The user clarified that this development Mac is the **screen-sharing host** in
+their current, unrelated working setup. Do not attempt to run the viewer relay
+against that setup's existing host sockets or ask the user to reconnect without
+a viewer-side test ready. Give the test package to the controlling Mac: disconnect
+its session, start the experiment with the host IP, wait for Relay ready, then
+connect normally in High Performance mode. The current unrestricted setup can
+establish transport compatibility; it cannot establish the affected Macs' filter
+behavior. No change to the host is required for this incoming-only candidate.
+
+```sh
+swift test -j 4 -Xswiftc -warnings-as-errors
+swift build -c release -j 4 -Xswiftc -warnings-as-errors
+clang -fobjc-arc -framework Foundation Scripts/probe-native-udp.m -o .build/probe-native-udp
+python3 Scripts/test-incoming-relay.py --native-helper .build/probe-native-udp -v
+python3 Scripts/test-ruby-relay.py --portable -v
+bash Packaging/build-relay-experiment.sh
+python3 Scripts/test-incoming-experiment.py dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64/screensharing-proxy-experiment -v
+```
+
+The packaging command refuses an existing destination/archive to avoid deleting
+reports. Move an earlier build aside before intentionally rebuilding. The
+subsequent sections preserve earlier implementation context; the current state
+above supersedes stale test counts and unimplemented-candidate descriptions.
+
+## Earlier implementation context
+
 Latest work is on `ruby-relay-experiment`. The user chose system Ruby and
 explicitly declined interface changes. `Resources/relay.rb` implements bounded
 opaque TCP forwarding and three fixed-peer UDP channels, and `RubyRelayRunner`
@@ -33,7 +96,8 @@ Read RUBY_RELAY_EXPERIMENT.md for the evidence links and scope limits. The next
 candidate can keep TCP direct and relay incoming UDP only, but AVConference's
 source acceptance, explicit-destination feedback, startup conflicts, effective
 firewall treatment and live behavior on the restricted OS remain gates. The
-existing relay.rb does not implement this candidate. Do not enable it as if it did.
+existing relay.rb does not implement this candidate. The later incoming-relay.rb
+does; neither path is enabled in the app or proven with a complete native session.
 
 The user authorized implementation on the current model on 2026-10-17, with
 complex infrastructure first and simpler UI/distribution work later on Sol.

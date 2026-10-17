@@ -1,12 +1,21 @@
 # Ruby relay experiment
 
-Status: the transport implementation passes local tests, but the proposed native
+Current status (2026-10-18): `Resources/incoming-relay.rb` implements the
+incoming-only candidate, with exclusive startup, bounded buffers, fixed peers,
+local submission counters, route checks and owned-process cleanup. Six native
+tests pass on the local macOS 26.7.1 Mac, including the actual Apple socket
+helper. A separate [bounded experiment command](INCOMING_EXPERIMENT_GUIDE.md)
+is available for live testing. Full High Performance video, input and feedback
+remain unproven, and the app remains diagnostic-only. Read the
+[native AVConference follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md).
+
+The original address-separated transport implementation passes local tests, but its proposed native
 connection path is **blocked under the no-interface-change constraint**. It is
 not enabled in the application and is not a functioning High Performance proxy.
 
 A different incoming-only candidate now passes macOS UDP delivery probes,
 including the actual native socket-creation helper. That candidate is described
-below; it is not yet implemented by `Resources/relay.rb`, and AVConference/live
+below; it is implemented separately from `Resources/relay.rb`, and AVConference/live
 High Performance behavior remains untested.
 
 The user selected system Ruby after the restricted Mac listed /usr/bin/ruby as

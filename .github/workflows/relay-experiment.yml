@@ -54,3 +54,13 @@ jobs:
               assert len(scripts) == 1
               assert scripts[0].read_bytes() == Path('Sources/ProxyCore/Resources', name).read_bytes()
           PY
+      - name: Package and exercise the bounded incoming experiment command
+        run: |
+          bash Packaging/build-relay-experiment.sh
+          python3 Scripts/test-incoming-experiment.py dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64/screensharing-proxy-experiment -v
+      - name: Save the experimental command for controlled native testing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: incoming-relay-experiment-macOS-arm64
+          path: dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64.zip
+          retention-days: 7

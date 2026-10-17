@@ -51,9 +51,11 @@ class IncomingTests(unittest.TestCase):
                     s.settimeout(2)
                     s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 131072)
                 return base, sockets
-            except OSError:
+            except OSError as error:
                 for s in sockets:
                     s.close()
+                if error.errno != errno.EADDRINUSE:
+                    raise  # Permission/sandbox errors are not port exhaustion.
         self.fail('No free fixture range')
 
     def start(self, config=None):

@@ -1,5 +1,11 @@
 # High Performance Screen Sharing: services and relay requirements
 
+Follow-up on 2026-10-18: native development is now available on the user's
+macOS 26.7.1 Mac. [AVConference transport findings](AVCONFERENCE_TRANSPORT_FINDINGS.md)
+record an explicit-destination send path for unconnected UDP sockets and the
+remaining receive/source-validation limits. The incoming Ruby relay and actual
+Apple socket helper pass local tests; a complete live session remains unproven.
+
 Research date: 2026-10-17. This updates the preliminary transport hypothesis used
 for the diagnostic alphas. It is static analysis and documented research, not a
 successful relay experiment.

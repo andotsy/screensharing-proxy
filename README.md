@@ -12,8 +12,11 @@ The app opens on its **Diagnostics** tab. **Proxy** and **Settings** are visible
 but grayed out until those features are available. One button collects diagnostics
 and opens a Save dialog for a redacted ZIP. Collection includes exact `proxyd`
 discovery and separate Python/Ruby firewall candidates.
-**Traffic forwarding remains unfinished.** The permitted service's forwarding
-interface must be identified on the viewer Mac before a backend is chosen.
+**Traffic forwarding remains experimental.** System Ruby is the selected
+candidate; full native High Performance media and control remain unproven.
+The separate [incoming experiment](docs/INCOMING_EXPERIMENT_GUIDE.md) runs on
+the **controlling Mac**, not the Mac whose screen is shared. It does not enable
+the diagnostic app's disabled features.
 
 Implemented:
 
@@ -68,10 +71,22 @@ swift test -Xswiftc -warnings-as-errors
 swift build -c release -Xswiftc -warnings-as-errors
 ```
 
-In this cloud workspace use `bash Scripts/swift-cloud.sh test -j 4
+Native macOS development uses the installed Xcode toolchain and system Ruby.
+In the original Linux cloud workspace use `bash Scripts/swift-cloud.sh test -j 4
 -Xswiftc -warnings-as-errors` instead; the wrapper uses the installed, verified
 Swift 6.2 Linux toolchain and writable caches. There are no external package
 dependencies.
+
+Build a separate, ad-hoc-signed incoming-relay test ZIP on Apple silicon macOS:
+
+```sh
+bash Packaging/build-relay-experiment.sh
+```
+
+This is a development artifact for controlled testing, not a published working
+proxy. The experiment branch's workflow also saves it as a CI artifact. Read the
+[native AVConference findings](docs/AVCONFERENCE_TRANSPORT_FINDINGS.md) before
+interpreting relay counters as media success.
 
 [Implementation handoff](docs/HANDOFF.md) ·
 [Transport findings](docs/TRANSPORT_FINDINGS.md) ·
