@@ -50,7 +50,7 @@ module ScreenSharingRelay
         injector.connect(@external, @base + offset)
         @udp_routes[external] = [injector, :received]
       end
-      @route_check = ScreenSharingRelay.now + 5
+      @source_check = ScreenSharingRelay.now + 5
       @expires = ScreenSharingRelay.now + 1800
       @ready = true
     end
@@ -88,11 +88,7 @@ module ScreenSharingRelay
       @operation = 'waiting'
       now = ScreenSharingRelay.now
       raise Failure.new('connectionTimedOut') if now >= @expires
-      if now >= @route_check
-        @operation = 'routeCheck'
-        raise Failure.new('routeChanged') unless route_address == @external
-        @route_check = now + 5
-      end
+      check_source_address(now)
       selected = IO.select([@input] + @udp_routes.keys, @out.empty? ? [] : [@output], nil, 0.1)
       if selected
         readable, writable = selected

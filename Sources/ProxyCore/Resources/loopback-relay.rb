@@ -75,7 +75,7 @@ module ScreenSharingRelay
       @listener.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
       @listener.bind(Socket.sockaddr_in(@listen_port, @local))
       @listener.listen(1)
-      @route_check = ScreenSharingRelay.now + 5
+      @source_check = ScreenSharingRelay.now + 5
       @expires = ScreenSharingRelay.now + 1800
       @ready = true
     end
@@ -83,11 +83,7 @@ module ScreenSharingRelay
     def tick
       now = ScreenSharingRelay.now
       raise Failure.new('connectionTimedOut') if now >= @expires
-      if now >= @route_check
-        @operation = 'routeCheck'
-        raise Failure.new('routeChanged') unless route_address == @external
-        @route_check = now + 5
-      end
+      check_source_address(now)
       super
     end
   end

@@ -4,8 +4,11 @@ Status on 2026-10-18: **both incoming-only and loopback live tests failed**.
 The loopback attempt reached a login prompt but recorded no UDP exchange. Two
 reports had `localAddressUnavailable` without an operation label. A separate
 `incompatibleProtocol` report matches a reproduced clean-exit supervisor race,
-now fixed. Schema-3 adds TCP progress, final failure counters and fixed operation
-labels to locate the remaining error; it is not a proven connection fix.
+now fixed. A subsequent schema-3 report identified `routeChanged` at `routeCheck`
+before any native TCP accept. The relay now verifies its pinned address remains
+assigned/up instead of aborting when a fresh socket selects another source.
+`Run.command` opens a new native connection after ready; its synthetic TCP
+greeting path passes on the development Mac. Full media/input remains unproven.
 See [the current handoff](HANDOFF.md).
 
 The previously working 26.7.1 pair produced gray video and a generic stream error

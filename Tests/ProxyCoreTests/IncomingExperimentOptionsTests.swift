@@ -3,6 +3,24 @@ import Testing
 @testable import ProxyCore
 
 @Suite struct IncomingExperimentOptionsTests {
+    @Test func viewerLaunchIsExplicitAndRestrictedToLoopback() throws {
+        let required = ["--remote", "192.0.2.1", "--output", "result.json"]
+        let manual = try IncomingExperimentOptions(arguments: ["loopback"] + required)
+        #expect(!manual.openViewer)
+        for arguments in [["loopback", "--open-viewer"] + required, ["loopback"] + required + ["--open-viewer"]] {
+            #expect(try IncomingExperimentOptions(arguments: arguments).openViewer)
+        }
+        for arguments in [
+            ["incoming"] + required + ["--open-viewer"],
+            ["loopback"] + required + ["--open-viewer", "--open-viewer"],
+            ["loopback"] + required + ["--open-viewer", "true"],
+        ] {
+            #expect(throws: IncomingExperimentOptions.InvalidInvocation.self) {
+                try IncomingExperimentOptions(arguments: arguments)
+            }
+        }
+    }
+
     @Test func loopbackUsesOnlyTheExistingLocalAddressAndExplicitTCPPorts() throws {
         let options = try IncomingExperimentOptions(arguments: [
             "loopback", "--remote", "192.0.2.1", "--output", "result.json",

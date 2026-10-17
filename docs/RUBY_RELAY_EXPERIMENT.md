@@ -1,11 +1,13 @@
 # Ruby relay experiment
 
 Current status (2026-10-18): the loopback candidate also failed live after a login
-prompt, before any reported UDP exchange. Its schema-2 reports lacked the socket
-operation needed to diagnose two `localAddressUnavailable` failures. A confirmed
-supervisor clean-exit race is fixed; schema-3 adds precise, private failure
-context and TCP progress. These are diagnostic repairs, not a successful native
-session. See [the current handoff](HANDOFF.md) and [guide](LOOPBACK_EXPERIMENT_GUIDE.md).
+prompt, before any reported UDP exchange. A subsequent schema-3 attempt proved
+the periodic fresh-route comparison stopped the relay before TCP acceptance.
+The guard now checks that the pinned source remains assigned/up, preserving
+usable sockets when fresh source selection differs. `Run.command` opens the
+native viewer after ready, with a verified synthetic TCP greeting path. A prior
+supervisor clean-exit race is also fixed. No full native session is proven.
+See [the current handoff](HANDOFF.md) and [guide](LOOPBACK_EXPERIMENT_GUIDE.md).
 
 Earlier status: the incoming-only candidate **failed live on the
 previously working pair**. The user observed gray video and a generic stream

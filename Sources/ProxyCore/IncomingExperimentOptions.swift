@@ -10,6 +10,7 @@ public struct IncomingExperimentOptions: Sendable {
     public let output: String
     public let listenerPort: UInt16
     public let remoteControlPort: UInt16
+    public let openViewer: Bool
 
     public struct InvalidInvocation: Error, CustomStringConvertible, Sendable {
         public let description: String
@@ -22,12 +23,24 @@ public struct IncomingExperimentOptions: Sendable {
         mode = verb == "loopback" ? .loopback : .incoming
         var remote: String?, output: String?, base: UInt16 = 5900, duration = 600
         var listenerPort: UInt16 = 15900, remoteControlPort: UInt16 = 5900
+        var openViewer = false
         var seen = Set<String>()
         var index = 1
         while index < arguments.count {
             let flag = arguments[index]
-            guard seen.insert(flag).inserted, index + 1 < arguments.count else {
-                throw InvalidInvocation(description: "Every option requires one value and may appear only once.")
+            guard seen.insert(flag).inserted else {
+                throw InvalidInvocation(description: "Each option may appear only once.")
+            }
+            if flag == "--open-viewer" {
+                guard mode == .loopback else {
+                    throw InvalidInvocation(description: "--open-viewer requires loopback mode.")
+                }
+                openViewer = true
+                index += 1
+                continue
+            }
+            guard index + 1 < arguments.count else {
+                throw InvalidInvocation(description: "This option requires one value.")
             }
             let value = arguments[index + 1]
             switch flag {
@@ -70,6 +83,7 @@ public struct IncomingExperimentOptions: Sendable {
         self.output = output
         self.listenerPort = listenerPort
         self.remoteControlPort = remoteControlPort
+        self.openViewer = openViewer
     }
 
     public func configuration(sessionID: UUID = UUID()) -> RubyRelayConfiguration {

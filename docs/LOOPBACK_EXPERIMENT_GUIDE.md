@@ -14,11 +14,19 @@ address; the old report did not identify which operation failed. One reported
 `incompatibleProtocol` alongside a clean stop acknowledgement. A reproduced
 supervisor race could mislabel a clean exit that way and is now fixed.
 
-This revision improves failure evidence, not a proven fix for connection setup.
-Schema-3 reports retain final counters and identify TCP acceptance/connection,
-read-side closures, the failing operation and a fixed socket-error category.
-A changed selected route now has its own `routeChanged` code. Full native High
-Performance operation remains unverified.
+The next schema-3 report identified `routeChanged` at `routeCheck`, before any
+native TCP accept. The relay incorrectly stopped whenever a fresh UDP socket
+selected a different source address, even if its existing bound sockets remained
+usable. This revision keeps those sockets pinned and checks that their address
+is still assigned to an up interface. It stops with `localAddressUnavailable`
+at `sourceCheck` if that address is gone or down. It does not rebind sockets or
+change network configuration. The report cannot explain why the fresh socket
+selected another source on the test Mac.
+
+`Run.command` now opens Apple's Screen Sharing URL handler after Relay ready.
+The native launch path reaches a local listener without editing a saved entry.
+This fixes the over-strict route guard and avoids reliance on the connection
+editor; full native High Performance operation remains unverified.
 
 ## One attempt on the controlling Mac
 
@@ -27,10 +35,11 @@ and its built-in system Ruby; Python is not needed.
 
 1. Disconnect Screen Sharing on the **controlling** Mac and unzip this package.
 2. Open `Run.command`. Enter the **host's IPv4 address** at the Terminal prompt.
-3. Wait for **Relay ready**. In Apple's Screen Sharing connection editor, use
-   **Host: 127.0.0.1**, **Port: 15900**, **Type: High Performance**. Authenticate
-   normally with the remote Mac's account. The relay forwards the opaque control
-   stream; it does not collect credentials or decode media.
+3. Wait for **Relay ready**. Screen Sharing opens automatically to
+   **127.0.0.1:15900**. Authenticate with the **remote Mac's account**, and choose
+   **High Performance** when offered. Leave your saved connection out of this
+   attempt. The relay forwards the opaque control stream; it does not collect
+   credentials or decode media.
 4. Check video, keyboard/mouse and enabled audio. If the connection fails, note
    the exact error and whether it appeared before or after entering credentials.
    The JSON records transport progress without credentials or payloads. Stop
@@ -43,6 +52,12 @@ If High Performance is unavailable for the localhost connection, that is a
 failed negotiation test; Standard mode is not a successful result. After testing,
 disconnect the localhost connection and use your original host connection to
 return to normal sharing.
+
+If the automatic launch cannot open Screen Sharing, use its **New Connection**
+button (or Command-N), enter **127.0.0.1:15900** in the single **Connect To** field,
+and click Connect while the relay is running. The address includes the port.
+The edited saved-entry Connect action previously produced no accepted TCP
+connection; its cause has not been established.
 
 An `addressInUse` result preserves the existing owner and releases partial
 reservations. A native service may retain ports after disconnect; do not stop
@@ -63,16 +78,19 @@ also include TCP. Neither indicates accepted SRTP or decoded video. The report's
 `nativeTCPAccepted` and `remoteTCPConnected` describe sockets, not authentication.
 `nativeTCPReadClosed` and `remoteTCPReadClosed` record read EOF, not why a peer
 closed. `failureOperation` and `failureSystemError` contain finite labels, not
-raw exception text. A normal `relayExited` result can still accompany a failed
+raw exception text. Older reports may contain `routeChanged` / `routeCheck`;
+this revision no longer compares fresh route selections. A normal `relayExited`
+result can still accompany a failed
 Screen Sharing attempt. The relay does not parse or diagnose authentication.
 
 ```sh
 ./screensharing-proxy-experiment loopback --remote 192.0.2.10 \
   --output new-result.json --duration 60 --listen-port 15900 \
-  --remote-control-port 5900 --media-base 5900
+  --remote-control-port 5900 --media-base 5900 --open-viewer
 ```
 
 Replace the documentation address with the host's address. The local TCP port
 must match the connection editor; the remote TCP port and media base must match
 the host's existing configuration. This command does not change that configuration.
 IPv6 and hostnames are not supported by this experiment.
+Omit `--open-viewer` to start only the relay and connect manually after ready.

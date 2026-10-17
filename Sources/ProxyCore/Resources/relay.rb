@@ -154,6 +154,21 @@ module ScreenSharingRelay
       socket
     end
 
+    def check_source_address(now)
+      return if now < @source_check
+      @operation = 'sourceCheck'
+      # Existing sockets remain bound to this address. A fresh unbound socket
+      # can select a different source without invalidating those bindings.
+      # Never move a live session to that other address; fail if ours is gone.
+      available = Socket.getifaddrs.any? do |interface|
+        address = interface.addr
+        address && address.ipv4? && address.ip_address == @external &&
+          (interface.flags & Socket::IFF_UP) != 0
+      end
+      raise Failure.new('localAddressUnavailable') unless available
+      @source_check = now + 5
+    end
+
     def udp(address, peer, port_number)
       socket = own(UDPSocket.new(Socket::AF_INET))
       # Deliberately no SO_REUSEADDR/SO_REUSEPORT. Fail on a conflicting owner.

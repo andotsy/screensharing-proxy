@@ -31,7 +31,7 @@ public enum BackendEvent: Codable, Sendable, Equatable {
 
 /// Fixed labels only; no socket addresses, exception strings or payloads.
 public enum BackendOperation: String, Codable, Sendable {
-    case configuration, socketReservation, routeCheck, viewerAccept, hostBind, hostConnect
+    case configuration, socketReservation, routeCheck, sourceCheck, viewerAccept, hostBind, hostConnect
     case tcpRead, tcpWrite, udpReceive, udpSend, tcpShutdown, parentInput, eventOutput, waiting
 }
 

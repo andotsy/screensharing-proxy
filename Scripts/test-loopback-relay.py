@@ -258,7 +258,7 @@ exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
                 self.assertEqual(child.event('failed')['code'], 'localAddressUnavailable')
                 self.assertEqual(child.process.wait(timeout=3), 1)
 
-    def test_route_change_has_a_distinct_failure(self):
+    def test_new_route_selection_does_not_abort_usable_pinned_sockets(self):
         script = SUPPORT['OPTIONS'].script
         with tempfile.TemporaryDirectory(prefix='ssp-route-fixture-') as directory:
             wrapper = Path(directory) / 'fixture.rb'
@@ -275,10 +275,67 @@ exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
             child = Child(self.config, script=wrapper)
             self.children.append(child)
             child.event('ready')
-            context = child.event('failureContext', timeout=7)
-            self.assertEqual(context, {'operation': 'routeCheck', 'systemError': None})
-            self.assertEqual(child.event('failed')['code'], 'routeChanged')
-            self.assertEqual(child.process.wait(timeout=3), 1)
+            # Cross the five-second check before connecting, as in the failed
+            # live attempt. The previous guard aborted these usable sockets.
+            for _ in range(6):
+                child.event('media')
+            client = self.own(socket.socket())
+            client.connect(('127.0.0.1', self.listener_port))
+            server, peer = self.remote.accept()
+            self.own(server)
+            self.assertEqual(peer[0], self.address)
+            client.sendall(b'control')
+            self.assertEqual(server.recv(7), b'control')
+            server.sendall(b'reply')
+            self.assertEqual(client.recv(5), b'reply')
+            native = self.native(0)
+            self.media[0].sendto(b'media', (self.address, self.base))
+            self.assertEqual(native.recvfrom(1024), (b'media', ('127.0.0.1', self.base)))
+            native.sendto(b'feedback', ('127.0.0.1', self.base))
+            self.assertEqual(self.media[0].recvfrom(1024), (b'feedback', (self.address, self.base)))
+            self.assertIsNone(child.process.poll())
+
+    def test_missing_or_down_pinned_address_stops_and_releases_sockets(self):
+        script = SUPPORT['OPTIONS'].script
+        for mode in ('missing', 'down'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix='ssp-source-fixture-') as directory:
+                wrapper = Path(directory) / 'fixture.rb'
+                wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module MissingInterfaceFixture
+  def getifaddrs
+    super.flat_map do |interface|
+      if interface.addr && interface.addr.ipv4? && interface.addr.ip_address == {json.dumps(self.address)}
+        {json.dumps(mode)} == 'missing' ? [] : [Struct.new(:addr, :flags).new(interface.addr, interface.flags & ~Socket::IFF_UP)]
+      else
+        [interface]
+      end
+    end
+  end
+end
+Socket.singleton_class.prepend(MissingInterfaceFixture)
+module CheckImmediatelyFixture
+  def prepare
+    super
+    @source_check = 0
+  end
+end
+ScreenSharingRelay::LoopbackRelay.prepend(CheckImmediatelyFixture)
+exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
+""")
+                child = Child(self.config, script=wrapper)
+                self.children.append(child)
+                child.event('ready')
+                self.assertEqual(child.event('failureContext'), {'operation': 'sourceCheck', 'systemError': None})
+                self.assertEqual(child.event('failed')['code'], 'localAddressUnavailable')
+                self.assertEqual(child.process.wait(timeout=3), 1)
+                for address in (self.address, '127.0.0.1'):
+                    for offset in range(3):
+                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                            probe.bind((address, self.base + offset))
+                with socket.socket() as probe:
+                    probe.bind(('127.0.0.1', self.listener_port))
+                    probe.listen(1)
 
     def test_refused_host_connection_reports_connect_stage(self):
         self.remote.close()

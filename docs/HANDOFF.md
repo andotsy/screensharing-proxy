@@ -2,6 +2,41 @@
 
 ## Current resume point — 2026-10-18
 
+The subsequent schema-3 attempt failed with **`routeChanged` / `routeCheck`**
+after about 20 seconds, with ready true, no native TCP acceptance and zero
+traffic. The user edited a saved connection to 127.0.0.1:15900 and Connect did
+nothing. This report proves the periodic fresh-source comparison stopped the
+relay, not that its already-bound sockets were unusable or that the host rejected
+authentication. It does not identify why source selection differed.
+
+Both relay candidates now keep the original source and periodically verify it
+is assigned to an up interface using Ruby's read-only `Socket.getifaddrs`.
+No rebind, route/interface change or system-service operation is performed.
+Missing/down addresses fail with `localAddressUnavailable` at `sourceCheck`;
+actual socket errors retain their operation/category. Legacy route labels remain
+decodable. Native regressions show TCP and both UDP directions still work after
+the old fresh-source comparison would abort, and missing/down-source fixtures
+fail and release sockets. The incoming candidate shares the corrected guard.
+
+A fresh native Connect To entry and Apple's `vnc://127.0.0.1:15900` URL handler
+both reached a local synthetic TCP listener on this 26.7.1 Mac. The saved-entry
+no-op remains unexplained. `Run.command` now passes `--open-viewer`: after ready,
+the command invokes the URL handler through a bounded `/usr/bin/open` child.
+It neither edits saved profiles nor selects High Performance or supplies login
+credentials. The user chooses High Performance when Apple offers it. See the
+[updated guide](LOOPBACK_EXPERIMENT_GUIDE.md). Do not recommend the old 66f17be
+package again: it still has the over-strict guard.
+
+Validation: 72 Swift tests, release build, 12 loopback and seven incoming relay
+tests, four command checks in each mode, and two portable Ruby startup checks
+pass natively (seven distinct-address fixtures skip). The actual viewer also auto-launched through the release
+relay to a temporary synthetic TCP greeting server on the development VM:
+both TCP progress flags became true, 12 bytes passed in each direction, and
+the duration limit stopped/reaped the relay with a stop acknowledgement. This
+does not test authentication, media or a full High Performance session.
+
+### Earlier loopback reports and supervisor repair
+
 The first loopback live test also **failed**. Four schema-2 reports reached ready
 on 26.7.1 with zero UDP submissions. Two ended with `localAddressUnavailable`
 after 15–20 seconds and no reported TCP bytes; one was interrupted with zero
@@ -14,11 +49,11 @@ A regression reproduces the supervisor misclassifying stdout EOF as incompatible
 when Ruby has emitted `stopped` but has not exited yet. The fix allows bounded
 exit grace and still rejects EOF without a terminal event. Schema-3 reports now
 include TCP acceptance/connection/read-EOF flags and fixed failure-operation and
-socket-error labels; Ruby emits final counters before failure. A changed route
-has a distinct code. This improves diagnosis; the two unavailable-address errors
-are not yet explained or fixed. Do not claim the transport works or infer a
-firewall/authentication cause. One new attempt with the schema-3 package is
-needed to localize the remaining failure.
+socket-error labels; Ruby emits final counters before failure. A changed fresh
+source had a distinct code, which localized the later failure described above.
+The earlier schema-2 address errors cannot be retrospectively assigned to a
+particular operation. Do not claim the transport works or infer a
+firewall/authentication cause.
 
 Current validation commands include the normal Swift suite/release build,
 `test-loopback-relay.py --native-helper .build/probe-native-udp`, the incoming

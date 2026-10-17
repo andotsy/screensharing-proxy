@@ -10,6 +10,7 @@ import runpy
 import socket
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 
@@ -104,6 +105,30 @@ class IncomingTests(unittest.TestCase):
         native = self.native()
         self.remote[0].sendto(b'expected', ('127.0.0.1', self.base))
         self.assertEqual(native.recvfrom(1024)[0], b'expected')
+
+    def test_new_route_selection_does_not_abort_pinned_incoming_socket(self):
+        script = SUPPORT['OPTIONS'].script
+        with tempfile.TemporaryDirectory(prefix='ssp-incoming-source-') as directory:
+            wrapper = Path(directory) / 'fixture.rb'
+            wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module ChangedRouteFixture
+  def route_address
+    @ready ? '192.0.2.254' : super
+  end
+end
+ScreenSharingRelay::IncomingRelay.prepend(ChangedRouteFixture)
+exit ScreenSharingRelay::IncomingRelay.new(STDIN, STDOUT).run
+""")
+            child = Child(self.config, script=wrapper)
+            self.children.append(child)
+            child.event('ready')
+            for _ in range(6):
+                child.event('media')
+            native = self.native()
+            self.remote[0].sendto(b'still usable', ('127.0.0.1', self.base))
+            self.assertEqual(native.recvfrom(1024)[0], b'still usable')
+            self.assertIsNone(child.process.poll())
 
     def test_existing_reusable_wildcard_and_connected_owners_prevent_startup(self):
         for connected in (False, True):

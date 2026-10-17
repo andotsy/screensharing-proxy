@@ -71,7 +71,7 @@ private final class Observation: @unchecked Sendable {
             case .ready:
                 report.relayReady = true
                 if mode == .loopback {
-                    status("Relay ready. In Screen Sharing, connect to 127.0.0.1, TCP Port \(listenerPort), and select High Performance.\n")
+                    status("Relay ready. Screen Sharing target: 127.0.0.1:\(listenerPort). Select High Performance when offered.\n")
                 } else {
                     status("Relay ready. Connect Apple's Screen Sharing directly to the remote Mac in High Performance mode.\n")
                 }
@@ -175,13 +175,36 @@ struct ProxyRelayExperiment {
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
         signal(SIGHUP, SIG_IGN)
+        let ready = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let viewer: Task<Void, Never>? = options.openViewer ? Task {
+            for await _ in ready.stream {
+                guard !Task.isCancelled else { return }
+                // Launch Apple's public URL handler only after all sockets are
+                // reserved. No saved connection, authentication or mode edits.
+                let result = await BoundedCommandRunner().run(CommandSpec(
+                    "/usr/bin/open", ["-b", "com.apple.ScreenSharing", "vnc://127.0.0.1:\(options.listenerPort)"],
+                    timeout: 5, outputLimit: 4096
+                ))
+                guard !Task.isCancelled else { return }
+                if result.succeeded {
+                    status("Screen Sharing launch requested. Authenticate normally and choose High Performance when offered.\n")
+                } else {
+                    status("Could not open Screen Sharing. Use New Connection (Command-N), enter 127.0.0.1:\(options.listenerPort), then Connect.\n")
+                }
+                return
+            }
+        } : nil
         let relay = Task {
-            await RubyRelayRunner().run(configuration: options.configuration(), onEvent: { observation.record($0) })
+            await RubyRelayRunner().run(configuration: options.configuration(), onEvent: {
+                observation.record($0)
+                if options.openViewer, $0.event == .ready { ready.continuation.yield(()) }
+            })
         }
         let signals = [SIGINT, SIGTERM, SIGHUP].map { number in
             let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
             source.setEventHandler {
                 observation.stop("interrupted")
+                viewer?.cancel()
                 relay.cancel()
             }
             source.resume()
@@ -191,9 +214,13 @@ struct ProxyRelayExperiment {
             do { try await Task.sleep(for: .seconds(options.duration)) }
             catch { return }
             observation.stop("durationReached")
+            viewer?.cancel()
             relay.cancel()
         }
         let result = await relay.value
+        ready.continuation.finish()
+        viewer?.cancel()
+        await viewer?.value
         deadline.cancel()
         for source in signals { source.cancel() }
         let report = observation.finish(result, elapsed: ProcessInfo.processInfo.systemUptime - started)
@@ -238,6 +265,7 @@ struct ProxyRelayExperiment {
       --duration SECONDS  Stop after 10...1200 seconds (default 600).
       --listen-port PORT  Loopback mode's local TCP port (default 15900).
       --remote-control-port PORT  Loopback mode's remote TCP port (default 5900).
+      --open-viewer       Open Apple's Screen Sharing after loopback Relay ready.
 
     Ctrl-C, termination or the duration limit stops and reaps the owned Ruby child.
     Reports contain aggregate counters and OS version, without endpoints, payloads
