@@ -7,7 +7,7 @@ var products: [Product] = [
 ]
 var targets: [Target] = [
     .target(name: "CProcessSupport", publicHeadersPath: "include"),
-    .target(name: "ProxyCore", dependencies: ["CProcessSupport"]),
+    .target(name: "ProxyCore", dependencies: ["CProcessSupport"], resources: [.copy("Resources/relay.rb")]),
     .target(name: "ProxyAppSupport", dependencies: ["ProxyCore"]),
     .executableTarget(name: "ProxyDiagnostics", dependencies: ["ProxyCore"]),
     .testTarget(name: "ProxyCoreTests", dependencies: ["ProxyCore"]),

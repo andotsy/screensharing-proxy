@@ -1,0 +1,22 @@
+name: Ruby relay experiment
+on:
+  push:
+    branches: ['ruby-relay-experiment']
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test existing loopback addresses without changing configuration
+        run: /usr/bin/ruby --disable-gems Scripts/probe-loopback.rb
+      - name: Check system Ruby protocol and portable core
+        run: |
+          python3 Scripts/test-ruby-relay.py --portable
+          swift test -Xswiftc -warnings-as-errors

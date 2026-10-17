@@ -22,12 +22,14 @@ public struct BackendEnvelope: Codable, Sendable, Equatable {
 public enum BackendEvent: Codable, Sendable, Equatable {
     case ready
     case traffic(receivedBytes: UInt64, sentBytes: UInt64)
+    case media(receivedDatagrams: UInt64, sentDatagrams: UInt64, droppedDatagrams: UInt64)
     case stopped
     case failed(code: BackendFailureCode)
 }
 
 public enum BackendFailureCode: String, Codable, Sendable {
     case unavailable, permissionUnknown, addressInUse, connectFailed, incompatibleProtocol, internalFailure
+    case invalidConfiguration, localAddressUnavailable, nativeSourceMismatch, connectionTimedOut
 }
 
 public enum BackendProtocolError: Error, Equatable {
@@ -91,6 +93,9 @@ public struct SessionLifecycle: Sendable {
     public private(set) var failure: BackendFailureCode?
     public private(set) var receivedBytes: UInt64 = 0
     public private(set) var sentBytes: UInt64 = 0
+    public private(set) var receivedDatagrams: UInt64 = 0
+    public private(set) var sentDatagrams: UInt64 = 0
+    public private(set) var droppedDatagrams: UInt64 = 0
     private var receivedStopAcknowledgement = false
     public init() {}
 
@@ -100,6 +105,7 @@ public struct SessionLifecycle: Sendable {
         let id = UUID()
         sessionID = id; phase = .checking; failure = nil
         receivedBytes = 0; sentBytes = 0; receivedStopAcknowledgement = false
+        receivedDatagrams = 0; sentDatagrams = 0; droppedDatagrams = 0
         explicitStop = false
         return id
     }
@@ -134,6 +140,12 @@ public struct SessionLifecycle: Sendable {
             // Unexpected stop is still an interruption; the process must be reaped.
             guard [.starting, .listening, .relaying].contains(phase) else { throw TransitionError.invalidTransition }
             phase = .stopping; receivedStopAcknowledgement = false
+        case let .media(received, sent, dropped):
+            guard [.listening, .relaying].contains(phase) else { throw TransitionError.handshakeRequired }
+            guard received >= receivedDatagrams, sent >= sentDatagrams, dropped >= droppedDatagrams else {
+                throw TransitionError.countersRegressed
+            }
+            receivedDatagrams = received; sentDatagrams = sent; droppedDatagrams = dropped
         case let .failed(code):
             guard [.starting, .listening, .relaying].contains(phase) else { throw TransitionError.invalidTransition }
             failure = code

@@ -6,9 +6,13 @@ isolated checkout, not an additional Git worktree. Do not publish names, links,
 commit identifiers or documentation copied from private reference projects.
 
 Read `docs/IMPLEMENTATION_PLAN.md` and `docs/TRANSPORT_FINDINGS.md`. The viewer's
-allowed executable is recalled as `proxyd`; its identity and forwarding API are
-unverified on the restricted Mac. Prefer installation on the controlling Mac
+allowed executable was recalled as `proxyd`, but neither Mac's capture found it.
+The restricted Mac lists Ruby and a Python launcher shim as allowed, while a
+Python.app runtime is blocked; actual receiving permission is still untested.
+Prefer installation on the controlling Mac
 alone, but the user explicitly permits a companion on the remote Mac if needed.
+The user selected system Ruby for the next experiment and explicitly declined
+interface configuration changes, including adding/removing loopback aliases.
 The goal includes full keyboard/mouse control, not read-only viewing.
 Do not implement a guessed service
 interface, change firewall rules, or describe TCP forwarding as a High Performance

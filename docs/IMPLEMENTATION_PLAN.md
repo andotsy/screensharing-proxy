@@ -55,10 +55,10 @@ another scope confirmation. No public relay service is planned.
 | Item | Evidence / conclusion |
 | --- | --- |
 | Native UI and release design | Native diagnostic app with one-button ZIP export and a styled DMG. |
-| High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. A user-confirmed working session on an unrestricted viewer shows Screen Sharing TCP to 5900, avconferenced UDP 5900 to the same peer, and wildcard UDP 5901 across ten snapshots. The restricted viewer remains unmeasured. |
+| High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. The working 26.7.1 viewer shows TCP 5900, connected avconferenced UDP 5900 and wildcard UDP 5901. During the user-confirmed failed attempt on the restricted 27.0.1 viewer, TCP is established and the final two snapshots show connected avconferenced UDP 5900 and 5901 to the same peer. Packet delivery remains unmeasured. |
 | Media addressing | Supplied server derives local/peer IPs from TCP and initializes media ports from managed `portBase` (default 5900). Viewer binding behavior remains unknown. |
-| Firewall problem | Reported by the user; not independently reproduced. The exact firewall implementation and receiving executable remain to be identified. |
-| Allowed process | The restricted viewer's permitted executable is still unconfirmed. The unrestricted viewer has five allowed Python/Ruby entries and no exact proxyd; /usr/bin/python3 identifies as an Xcode launcher shim. |
+| Firewall problem | Restricted viewer lists the Screen Sharing client executable as blocked. Global firewall/block-all state and effective socket attribution remain unknown; list entries alone do not prove the cause of failure. |
+| Allowed process | Restricted viewer lists /usr/bin/ruby and the /usr/bin/python3 launcher shim as allowed, but Python.app as blocked. No exact proxyd is found. Test Ruby first; no runtime's actual receiving permission or forwarding is verified. |
 | Development host | Debian Linux x86_64 with verified Swift 6.2 and Python. Native builds/app smoke tests run on GitHub macOS CI. |
 | Current application state | Native diagnostic GUI/CLI, portable process/protocol/lifecycle core and 57 tests exist. No functioning relay or successful proxied session is established. |
 
@@ -67,8 +67,10 @@ login/control while video or feedback continues directly to a blocked UDP socket
 Standard Screen Sharing success is not High Performance success.
 
 **Identify the permitted receiving executable and its capabilities** on the
-restricted Mac. The unrestricted Mac's Python/Ruby allow entries are candidates
-for investigation; do not require an exact proxyd or select Python by default.
+restricted Mac. Both captures provide Python/Ruby candidates; on the restricted
+Mac, the Python shim's allow entry coexists with a blocked Python.app runtime.
+Do not require an exact proxyd or select Python by default. Start controlled
+peer testing with system Ruby, whose executable itself is listed allowed.
 A Python process does not run "through proxyd" merely because it is launched
 from another process. A launchd parent, process name, port number, or copied
 executable name does not establish firewall identity. Check the executable that

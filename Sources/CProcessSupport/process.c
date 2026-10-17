@@ -31,13 +31,19 @@ static int make_pipe(int descriptors[2]) {
     return 0;
 }
 
-int ssp_spawn(const char *path, char *const argv[], char *const envp[], ssp_child *child) {
+static int spawn_impl(const char *path, char *const argv[], char *const envp[], ssp_child *child, int interactive) {
     pthread_mutex_lock(&spawn_lock);
-    int output[2] = {-1, -1}, error[2] = {-1, -1};
+    int output[2] = {-1, -1}, error[2] = {-1, -1}, input[2] = {-1, -1};
+    child->input_fd = -1;
     int result = make_pipe(output);
     if (result) goto cleanup;
     result = make_pipe(error);
     if (result) goto cleanup;
+    if (interactive) {
+        result = make_pipe(input);
+        if (result) goto cleanup;
+        if (fcntl(input[1], F_SETFL, O_NONBLOCK) < 0) { result = errno; goto cleanup; }
+    }
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attributes;
     result = posix_spawn_file_actions_init(&actions);
@@ -46,7 +52,13 @@ int ssp_spawn(const char *path, char *const argv[], char *const envp[], ssp_chil
     if (result) { posix_spawn_file_actions_destroy(&actions); goto cleanup; }
 
 #define CHECK(call) do { result = (call); if (result) goto destroy; } while (0)
-    CHECK(posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0));
+    if (interactive) {
+        CHECK(posix_spawn_file_actions_adddup2(&actions, input[0], STDIN_FILENO));
+        CHECK(posix_spawn_file_actions_addclose(&actions, input[0]));
+        CHECK(posix_spawn_file_actions_addclose(&actions, input[1]));
+    } else {
+        CHECK(posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0));
+    }
     CHECK(posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO));
     CHECK(posix_spawn_file_actions_adddup2(&actions, error[1], STDERR_FILENO));
     CHECK(posix_spawn_file_actions_addclose(&actions, output[0]));
@@ -75,14 +87,26 @@ destroy:
     if (!result) {
         close(output[1]); close(error[1]);
         child->output_fd = output[0]; child->error_fd = error[0];
+        if (interactive) {
+            close(input[0]);
+            child->input_fd = input[1];
+        }
         pthread_mutex_unlock(&spawn_lock);
         return 0;
     }
 cleanup:
-    close_pair(output); close_pair(error);
+    close_pair(output); close_pair(error); close_pair(input);
     pthread_mutex_unlock(&spawn_lock);
     return result;
 #undef CHECK
+}
+
+int ssp_spawn(const char *path, char *const argv[], char *const envp[], ssp_child *child) {
+    return spawn_impl(path, argv, envp, child, 0);
+}
+
+int ssp_spawn_interactive(const char *path, char *const argv[], char *const envp[], ssp_child *child) {
+    return spawn_impl(path, argv, envp, child, 1);
 }
 
 int ssp_has_exited(pid_t pid) {

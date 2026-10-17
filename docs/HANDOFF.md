@@ -74,8 +74,9 @@ socket attribution. No user payloads or uploaded binaries are in the repository.
 
 Next work, in order:
 
-1. Collect the restricted viewer's report and identify its permitted receiving
-   executable. Use the working unrestricted capture as a reference. Complete
+1. Use the restricted viewer's captured rules to test actual inbound TCP/UDP
+   reception, beginning with /usr/bin/ruby. Resolve unrecognized firewall policy
+   output. Use the working unrestricted capture as a reference and complete
    the transport experiment, with a remote companion if needed, as now authorized.
 2. Build the proven adapter/data path and its realistic local TCP/UDP tests.
    Do not fill the missing mechanism with a guessed TCP-only implementation.
@@ -165,3 +166,19 @@ same TCP/UDP pattern as the earlier capture. Five Python/Ruby firewall entries
 are allowed, accessible and signature-verified; /usr/bin/python3 identifies as
 an Xcode tool shim. Preserve this as the working reference, without committing
 the uploaded ZIP or its private metadata. See TRANSPORT_FINDINGS.md.
+
+The restricted viewer's alpha-5 ZIP has now been analyzed. It reports macOS
+27.0.1 (26A434), arm64, whereas the working reference and supplied binaries are
+26.7.1. The user confirms a failed High Performance attempt. TCP 5900 establishes
+during collection; the last two of ten complete snapshots show avconferenced
+connected UDP local 5900/5901 to the same peer's 5900/5901. Neither packet delivery
+nor the precise visible failure stage is recorded. The viewer client executable
+is explicitly listed blocked; avconferenced and screensharingd have no explicit
+list entry. System Ruby and the Python launcher shim are listed allowed, while
+Python.app is blocked. No exact proxyd was found; no runtime was executed.
+
+Global firewall state, block-all and all per-component incoming queries are
+unknown despite successful probe exits; the collector discarded the unrecognized
+stdout. Preserve this as an evidence gap, not an enabled/disabled assumption or
+an invented parser fix. See TRANSPORT_FINDINGS.md for the comparison and next
+experiment. Keep both uploaded archives and private paths outside the repo.

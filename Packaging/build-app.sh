@@ -15,6 +15,7 @@ rm -rf .build/native-bundle
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" .build/AppIcon.iconset
 cp Packaging/Info.plist "$bundle/Contents/Info.plist"
 cp .build/release/ScreenSharingProxy .build/release/screensharing-proxy-diagnose "$bundle/Contents/MacOS/"
+cp -R .build/release/ScreenSharingProxy_ProxyCore.bundle "$bundle/Contents/Resources/"
 # Assets.car carries the light, dark and tinted icon appearances for macOS 26.
 xcrun actool "$PWD/Packaging/AppIcon.icon" --compile "$PWD/$bundle/Contents/Resources" \
     --platform macosx --minimum-deployment-target 14.0 --app-icon AppIcon \
