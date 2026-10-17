@@ -15,7 +15,13 @@ rm -rf .build/native-bundle
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" .build/AppIcon.iconset
 cp Packaging/Info.plist "$bundle/Contents/Info.plist"
 cp .build/release/ScreenSharingProxy .build/release/screensharing-proxy-diagnose "$bundle/Contents/MacOS/"
-swift Packaging/app-icon.swift Packaging/Artwork/AppIcon.png .build/AppIcon.iconset
+# Assets.car carries the light, dark and tinted icon appearances for macOS 26.
+xcrun actool "$PWD/Packaging/AppIcon.icon" --compile "$PWD/$bundle/Contents/Resources" \
+    --platform macosx --minimum-deployment-target 14.0 --app-icon AppIcon \
+    --output-partial-info-plist "$PWD/.build/app-icon-info.plist" --output-format human-readable-text
+test -s "$bundle/Contents/Resources/Assets.car"
+# Replace actool's partial ICNS with every size rendered from the compiled icon.
+swift Packaging/app-icon.swift "$bundle" .build/AppIcon.iconset
 iconutil -c icns .build/AppIcon.iconset -o "$bundle/Contents/Resources/AppIcon.icns"
 plutil -lint "$bundle/Contents/Info.plist"
 for executable in ScreenSharingProxy screensharing-proxy-diagnose; do

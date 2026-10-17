@@ -125,7 +125,7 @@ opens NSSavePanel automatically. Save cancellation/failure preserves the archive
 collection cancellation preserves the prior archive. Closing quits and waits for
 probe cleanup. Legacy login registration is removed; Dock/menu bar settings are
 gone. All visible UDP sockets are retained, with unknown traffic unattributed.
-The new arrow/divider artwork is bundled from Packaging/Artwork/AppIcon.png.
+The arrow/divider icon is built from the Icon Composer document Packaging/AppIcon.icon.
 The DMG uses pinned dmgbuild, fixed Finder positions and 1x/2x backgrounds; its
 version label comes from SSPReleaseVersion. Live relay feasibility is still pending.
 

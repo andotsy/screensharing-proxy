@@ -20,6 +20,8 @@ def main():
     assert info["LSMinimumSystemVersion"] == "14.0"
     icon = bundle / "Contents/Resources/AppIcon.icns"
     assert icon.read_bytes().startswith(b"icns") and icon.stat().st_size > 1000
+    assert info["CFBundleIconName"] == "AppIcon"
+    assert (bundle / "Contents/Resources/Assets.car").stat().st_size > 1000
     binary = bundle / "Contents/MacOS/ScreenSharingProxy"
     version = subprocess.run([str(binary), "--version"], capture_output=True, text=True, check=True)
     assert version.stdout.strip() == "Screen Sharing Proxy " + info["SSPReleaseVersion"]
