@@ -17,18 +17,15 @@ public final class DiagnosticsModel {
     public private(set) var reportData: Data?
     public var remoteAddress = ""
     public var includePrivate = false
-    #if os(macOS)
-    @ObservationIgnored
-    #endif
     private let collector: any DiagnosticCollecting
-    #if os(macOS)
-    @ObservationIgnored
-    #endif
-    private var task: Task<Void, Never>?
-    #if os(macOS)
-    @ObservationIgnored
-    #endif
-    private var operationID: UUID?
+    private let operation = Operation()
+
+    // Immutable storage is excluded from Observation. Keeping the owned task
+    // here also avoids observing bookkeeping changes as UI state.
+    @MainActor private final class Operation {
+        var task: Task<Void, Never>?
+        var id: UUID?
+    }
 
     public init(collector: any DiagnosticCollecting = DiagnosticsCollector()) { self.collector = collector }
 
@@ -42,23 +39,23 @@ public final class DiagnosticsModel {
     public func collect() { start(samples: 3, useRemote: true) }
 
     public func cancel() {
-        guard let task else { return }
+        guard let task = operation.task else { return }
         activity = .cancelling
         task.cancel()
     }
 
-    public func waitForCompletion() async { await task?.value }
+    public func waitForCompletion() async { await operation.task?.value }
 
     public func stop() async {
         cancel()
-        await task?.value
+        await operation.task?.value
     }
 
     public func showError(_ text: String) { message = text }
     public func dismissMessage() { message = nil }
 
     private func start(samples: Int, useRemote: Bool) {
-        guard task == nil else { return }
+        guard operation.task == nil else { return }
         let text = remoteAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         if useRemote && !remoteIsValid { message = "Enter a numeric IPv4 or IPv6 address, or leave the field empty."; return }
         let remote = useRemote && !text.isEmpty ? IPAddress(text) : nil
@@ -68,10 +65,10 @@ public final class DiagnosticsModel {
         message = nil
         activity = useRemote ? .collecting : .discovering
         let id = UUID()
-        operationID = id
-        task = Task { [weak self, collector] in
+        operation.id = id
+        operation.task = Task { [weak self, collector] in
             let result = await collector.inspect(options)
-            guard let self, operationID == id else { return }
+            guard let self, operation.id == id else { return }
             if Task.isCancelled {
                 message = "Collection cancelled. Your previous report is unchanged."
             } else {
@@ -81,8 +78,8 @@ public final class DiagnosticsModel {
                     reportData = encoded
                 } catch { message = "The report could not be prepared for export." }
             }
-            operationID = nil
-            task = nil
+            operation.id = nil
+            operation.task = nil
             activity = .idle
         }
     }
