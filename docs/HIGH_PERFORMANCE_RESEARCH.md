@@ -123,6 +123,64 @@ Forwarding encrypted media locally may therefore be possible without editing
 media offers. This still depends on native-viewer binding/source validation,
 and does not prove later AVConference negotiation never changes an endpoint.
 
+### The connection editor's Port field and native UDP sockets
+
+The native connection editor exposes a custom Port even with High Performance
+selected. Apple's connection schema defines `Port` as **the TCP port number on
+the host to initiate the connection**. Its separate host settings schema defines
+`PortBase` for UDP and explicitly says it does not change the initial TCP port.
+[3] A local Ruby listener can therefore use a different TCP port from the
+remote server. This removes any need to move the remote server's TCP listener
+merely to reach the relay. It does not establish separate local UDP media ports.
+
+The [older custom-port answer](https://superuser.com/a/472119) changes the server's
+launchd TCP listener. It predates High Performance mode and provides no evidence
+about its UDP transport. Its system-file/service changes were not performed.
+
+Read-only inspection on the macOS 26.6.2 (25G83), arm64 CI host locates
+`+[SSSession udpSocketWithAVCMediaStreamConfig:port:]` in the system
+ScreenSharing framework. `Scripts/inspect-viewer-framework.swift` loads that
+framework and reads bounded method metadata/code without invoking the method
+or opening a native session. The initial method capture is preserved in
+[run 39067471379](https://github.com/andotsy/screensharing-proxy/actions/runs/39067471379).
+The follow-up [evidence job](https://github.com/andotsy/screensharing-proxy/actions/runs/39067881619/job/117499207660)
+resolves the Objective-C calls and authenticated import slots to `socket`,
+`setsockopt`, `__bind`, `inet_addr`/`inet_pton`, `__connect`, `__error` and `close`.
+Those function pointers are read, not invoked. Relevant offsets from the method
+entry are +0x44 (socket), +0x68/+0x80 (reuse options), +0x12c (bind), +0x1f8
+(connect), +0x210 (compare errno with Darwin EADDRINUSE, 48), and +0x330 (close).
+Disassembly establishes this sequence in the inspected method:
+
+1. Read `remoteAddress.isIPv6` from the media configuration and create a UDP
+   socket for the corresponding address family.
+2. Request both `SO_REUSEADDR` and `SO_REUSEPORT`. The method does not check the
+   results of those option calls.
+3. Bind a wildcard local address using the supplied 16-bit media port. On bind
+   failure, log the error, close the socket and return -1. This method contains
+   no retry selecting another port.
+4. Replace the wildcard with `remoteAddress.ip`, retaining that same port, and
+   connect the UDP socket to it. Return the descriptor on success. It also
+   tolerates `EADDRINUSE` from **connect**; other connect failures close it.
+
+The observed port argument is independent of a TCP connect operation in this
+method. The server evidence above independently initializes media ports from
+its UDP base. The connection field therefore cannot be assumed to change the
+native viewer's local media port or solve a same-address media collision.
+
+The reuse options refine the earlier conflict hypothesis: a wildcard bind is
+not automatically exclusive, and a future experiment must account for native
+reuse before deciding which separately addressed sockets can coexist. Reuse
+does not by itself prove which receiver gets a packet or solve identical local
+and peer tuples. The Ruby experiment currently deliberately omits reuse options
+and has not demonstrated coexistence with this native method. Adding a loopback
+alias alone would not prove that implementation works either.
+
+These findings describe the CI host's method, not every AVConference path or
+the restricted viewer's macOS 27.0.1 implementation. Caller retries, later socket
+changes, loopback acceptance, actual filter attribution and working media remain
+unmeasured. In particular, tolerating a failed UDP connect must not be mistaken
+for evidence of successful delivery.
+
 ### Published protocol notes are not an exact specification for this build
 
 The independent implementation reports HEVC/H.265 video and AAC audio over

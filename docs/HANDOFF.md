@@ -10,6 +10,17 @@ an alias, and the user declined that setup. Read `RUBY_RELAY_EXPERIMENT.md`; do
 not assume a remote companion fixes the viewer's local socket collision. No
 interface/firewall changes or native High Performance relay have been performed.
 
+The user's native GUI screenshot confirms a custom connection Port with High
+Performance selected. Apple defines it as the TCP destination, separately from
+the host UDP PortBase. The current research script reads the native viewer's UDP
+socket method on macOS 26.6.2 CI: it requests SO_REUSEADDR/SO_REUSEPORT, binds a
+wildcard at the media port, then connects to the media peer at the same port.
+It does not retry a new port on bind failure inside that method. Revisit socket
+coexistence with those reuse options; neither the existing Ruby implementation
+nor adding a separate address alone establishes native interoperability. Read
+HIGH_PERFORMANCE_RESEARCH.md for the exact evidence and version limits. Native
+app, resource, smoke and DMG checks pass at b2519df; no live relay is validated.
+
 The user authorized implementation on the current model on 2026-10-17, with
 complex infrastructure first and simpler UI/distribution work later on Sol.
 

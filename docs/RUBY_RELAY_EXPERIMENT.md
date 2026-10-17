@@ -28,8 +28,8 @@ only a live High Performance session can establish that Apple accepts it.
 ## Loopback address prerequisite (interface changes declined)
 
 macOS normally has 127.0.0.1 but may not permit binding 127.0.0.2 without adding
-an alias to lo0. Separate addresses are needed because the native client and
-relay use the same UDP port numbers. Preflight can try binding the address
+an alias to lo0. This experiment assumes separate addresses because the native
+client and relay use the same UDP port numbers. Preflight can try binding the address
 without changing configuration. The relay must report a missing address rather
 than modify interfaces itself.
 
@@ -84,6 +84,20 @@ firewall rules unchanged. Runtime receipt and Apple local delivery remain gates.
   changed. The existing loopback addresses do not provide the separated tuples
   required by this experiment. This is CI-host evidence, not a measurement of
   every possible address on the user's Mac.
+- [Native validation at b2519df](https://github.com/andotsy/screensharing-proxy/actions/runs/39067471379)
+  passes the 63 Swift tests, system Ruby startup checks, app build/signature,
+  native smoke test and embedded relay resource check. The accompanying
+  [normal CI](https://github.com/andotsy/screensharing-proxy/actions/runs/39067474822)
+  also passes, including DMG assembly. These checks do not run a live session.
+
+The connection editor's custom Port is the TCP control destination, so using
+a custom relay TCP listener is supported. It does not settle media port
+selection. Static inspection of the macOS 26.6.2 viewer framework finds a
+wildcard UDP bind to the supplied media port followed by a connect to the same
+port on the configured media peer. It requests SO_REUSEADDR and SO_REUSEPORT;
+the relay currently omits both. Socket coexistence therefore needs a native
+experiment even on a host with suitable distinct addresses. See
+[the detailed evidence and limits](HIGH_PERFORMANCE_RESEARCH.md#the-connection-editors-port-field-and-native-udp-sockets).
 
 A remote companion can separate its own native connection by binding its TCP
 source to one existing address and connecting to another existing address.

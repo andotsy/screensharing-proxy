@@ -23,6 +23,15 @@ Established by Apple documentation:
 - Managed `PortBase` changes the UDP base independently of the initial TCP port.
   A different TCP listener does not automatically remap media.
 
+The native GUI exposes that custom TCP destination through its Port field,
+including in High Performance mode. Static inspection of the macOS 26.6.2 CI
+host's viewer framework finds a UDP creation method that requests reuse options,
+binds a wildcard local address at the supplied media port, and connects to the
+media peer on that same port. It does not retry a different port on bind failure
+inside this method. This refines the bind-conflict hypothesis but does not prove
+socket coexistence or packet delivery. See the
+[method evidence and version limits](HIGH_PERFORMANCE_RESEARCH.md#the-connection-editors-port-field-and-native-udp-sockets).
+
 Established in supplied macOS 26.7.1 (25G241) files from a separate unblocked Mac:
 
 - `screensharingd` handles server control and dispatches media configuration to
