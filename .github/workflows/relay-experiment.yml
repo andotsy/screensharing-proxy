@@ -5,9 +5,9 @@ on:
 permissions:
   contents: read
 jobs:
-  macos:
+  evidence:
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     steps:
@@ -20,6 +20,16 @@ jobs:
         run: |
           python3 Scripts/inspect-native-transport.py
           swift Scripts/inspect-viewer-framework.swift
+  macos:
+    needs: evidence
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Check system Ruby protocol and portable core
         run: |
           python3 Scripts/test-ruby-relay.py --portable
