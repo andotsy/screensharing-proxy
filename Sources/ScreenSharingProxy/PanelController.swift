@@ -5,19 +5,20 @@ import SwiftUI
 final class PanelController: NSObject, NSWindowDelegate {
     private let model: DiagnosticsModel
     private var window: NSWindow?
+    var windowForSheet: NSWindow? { window }
     init(model: DiagnosticsModel) { self.model = model }
     var hasVisibleContent: Bool {
-        window?.isVisible == true && (window?.contentView?.bounds.width ?? 0) >= 580
+        window?.isVisible == true && (window?.contentView?.bounds.width ?? 0) >= 440
     }
     func show() {
         if window == nil {
             let controller = NSHostingController(rootView: MainPanel(model: model))
             controller.sizingOptions = []
             let panel = NSWindow(contentViewController: controller)
-            panel.title = "Screen Sharing Proxy"
+            panel.title = "Screen Sharing Diagnostics"
             panel.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-            panel.contentMinSize = NSSize(width: 580, height: 500)
-            panel.setContentSize(NSSize(width: 600, height: 590))
+            panel.contentMinSize = NSSize(width: 440, height: 440)
+            panel.setContentSize(NSSize(width: 480, height: 460))
             panel.isReleasedWhenClosed = false
             panel.isOpaque = false
             panel.backgroundColor = .clear
@@ -29,7 +30,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         NSApp.activate()
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        sender.orderOut(nil); return false
+        true
     }
 }
 

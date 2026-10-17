@@ -101,7 +101,7 @@ The toolchain lives outside the checkout in `/workspace/.toolchains/`; caches
 are under `/workspace/.cache/`. `HOME` is unchanged. No external Swift dependencies
 are declared. macOS builds use the local Xcode toolchain directly.
 
-Portable validation: 55 Swift Testing tests in eight suites pass with warnings
+Portable validation: 57 Swift Testing tests in ten suites pass with warnings
 as errors, covering the core and the app's serial collection/cancellation state
 and private atomic report writer. The app target is macOS-only; its real window,
 automatic discovery and report export are exercised by `Scripts/smoke-app.py` in
@@ -116,3 +116,23 @@ performance diagnostics and paired-capture workflow. Published assets are never
 replaced under the same version. The user authorized commits and releases.
 Other workspace repositories remain read-only. No firewall/display changes or
 running network relay have been made by this implementation.
+
+Alpha 4 replaces the paired/three-pane UI with one Collect Diagnostics button.
+It collects ten snapshots, creates a ZIP (diagnostics.json + README.txt), and
+opens NSSavePanel automatically. Save cancellation/failure preserves the archive;
+collection cancellation preserves the prior archive. Closing quits and waits for
+probe cleanup. Legacy login registration is removed; Dock/menu bar settings are
+gone. All visible UDP sockets are retained, with unknown traffic unattributed.
+The new arrow/divider artwork is bundled from Packaging/Artwork/AppIcon.png.
+The DMG uses pinned dmgbuild, fixed Finder positions and 1x/2x backgrounds; its
+version label comes from SSPReleaseVersion. Live relay feasibility is still pending.
+
+Runtime candidates now include Python/Ruby firewall targets (versioned names and
+app bundles). They remain separate from exact proxyd discovery and are never
+executed or called verified relays. The user supplied an unredacted report from
+a nonaffected viewer; keep the uploaded JSON outside the repository. Its three
+snapshots showed Screen Sharing TCP to 5900, avconferenced UDP 5900 to peer 5900,
+and avconferenced wildcard UDP 5901. This establishes an observed descriptor
+owner and potential bind conflict on that Mac, not effective filter attribution
+or the affected viewer's policy. System Python/Ruby and other runtime entries
+were explicitly listed as allowed; no proxyd was found.

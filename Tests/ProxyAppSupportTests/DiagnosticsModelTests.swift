@@ -4,116 +4,80 @@ import Testing
 @testable import ProxyAppSupport
 
 private actor CollectorFixture: DiagnosticCollecting {
-    let delay: Duration
+    var delay = Duration.zero
     var calls: [DiagnosticOptions] = []
-    var started = false
-    init(delay: Duration = .zero) { self.delay = delay }
+    func setDelay(_ delay: Duration) { self.delay = delay }
     func inspect(_ options: DiagnosticOptions) async -> DiagnosticCollection {
-        calls.append(options); started = true
+        calls.append(options)
         if delay != .zero { try? await Task.sleep(for: delay) }
-        var report = DiagnosticReport(schemaVersion: 2, collectedAt: "fixture", platform: "macOS",
-            privateDetailsIncluded: options.includePrivate, remoteFilter: options.remote?.value)
-        report.capturePhase = options.capturePhase
-        report.redactionScopeID = options.redactionScope.id
+        let report = DiagnosticReport(schemaVersion: 2, collectedAt: "fixture", platform: "macOS",
+            privateDetailsIncluded: options.includePrivate, remoteFilter: nil)
         return .init(report: report, discovery: .init(status: .notFound, candidates: [], selected: nil, reason: "fixture"))
     }
-    func hasStarted() -> Bool { started }
 }
 
-@MainActor @Suite("Native app collection state")
+@MainActor private final class SaverFixture: DiagnosticArchiveSaving {
+    var calls: [Data] = []
+    var result = DiagnosticSaveResult.saved
+    var cancelled = false
+    func save(_ data: Data) async -> DiagnosticSaveResult { calls.append(data); return result }
+    func cancel() { cancelled = true }
+}
+
+@MainActor @Suite("One-click diagnostics")
 struct DiagnosticsModelTests {
-    @Test func pairedCaptureLocksOptionsAndExportsBothWithOneRedactionScope() async throws {
-        let fixture = CollectorFixture()
-        let model = DiagnosticsModel(collector: fixture)
-        model.remoteAddress = "192.0.2.5"
-        model.captureSession()
-        #expect(await fixture.calls.isEmpty)
-        model.captureBaseline()
+    @Test func opensSaveAutomaticallyAfterOneCollection() async {
+        let collector = CollectorFixture(), saver = SaverFixture()
+        let model = DiagnosticsModel(saver: saver, collector: collector)
+        #expect(await collector.calls.isEmpty)
+        #expect(saver.calls.isEmpty)
+        model.collect()
         await model.waitForCompletion()
-        #expect(model.hasBaseline)
-        model.remoteAddress = "invalid.example"
-        model.includePrivate = true
-        model.captureSession()
-        await model.waitForCompletion()
-        let calls = await fixture.calls
-        #expect(calls.count == 2)
-        #expect(calls[1].samples == 10)
-        #expect(calls[1].remote == calls[0].remote)
-        #expect(!calls[1].includePrivate)
-        #expect(calls[0].redactionScope.id == calls[1].redactionScope.id)
-        let data = try #require(model.reportData)
-        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(json["kind"] as? String == "screenSharingCapturePair")
-        #expect((json["baseline"] as? [String: Any])?["capturePhase"] as? String == "baseline")
-        #expect((json["duringSession"] as? [String: Any])?["capturePhase"] as? String == "duringSession")
-        model.discover()
-        await model.waitForCompletion()
-        #expect(model.reportData == data)
-        model.resetPair()
-        #expect(!model.hasBaseline && model.reportData == nil)
-    }
-
-    @Test func cancellingSecondCapturePreservesBaselineExport() async throws {
-        let fixture = CollectorFixture()
-        let model = DiagnosticsModel(collector: fixture)
-        model.captureBaseline()
-        await model.waitForCompletion()
-        let data = try #require(model.reportData)
-        model.captureSession()
-        model.cancel()
-        await model.waitForCompletion()
-        #expect(model.reportData == data)
-        #expect(model.hasBaseline && model.sessionReport == nil)
-    }
-
-    @Test func discoveryNeedsNoManualPathOrRemoteAddress() async {
-        let fixture = CollectorFixture()
-        let model = DiagnosticsModel(collector: fixture)
-        model.remoteAddress = "invalid.example"
-        model.discover()
-        await model.waitForCompletion()
+        #expect(await collector.calls.count == 1)
+        #expect(await collector.calls[0].samples == 10)
+        #expect(await collector.calls[0].includePrivate == false)
+        #expect(await collector.calls[0].remote == nil)
+        #expect(saver.calls.count == 1)
+        #expect(saver.calls[0].prefix(4) == Data([0x50, 0x4b, 0x03, 0x04]))
         #expect(model.activity == .idle)
-        #expect(model.reportData != nil)
-        #expect(await fixture.calls.first?.remote == nil)
-        #expect(await fixture.calls.first?.samples == 1)
+        #expect(model.message?.hasPrefix("Saved.") == true)
     }
 
-    @Test func invalidRemoteDoesNotStartCollection() async {
-        let fixture = CollectorFixture()
-        let model = DiagnosticsModel(collector: fixture)
-        model.remoteAddress = "invalid.example"
-        model.collect()
-        #expect(model.message != nil)
-        #expect(!model.isBusy)
-        #expect(await fixture.calls.isEmpty)
+    @Test func cancelledSaveCanBeRetriedWithoutCollectingAgain() async {
+        let collector = CollectorFixture(), saver = SaverFixture()
+        saver.result = .cancelled
+        let model = DiagnosticsModel(saver: saver, collector: collector)
+        model.collect(); await model.waitForCompletion()
+        #expect(model.archiveData != nil)
+        #expect(model.message?.hasPrefix("Not saved.") == true)
+        saver.result = .saved
+        model.saveAgain(); await model.waitForCompletion()
+        #expect(await collector.calls.count == 1)
+        #expect(saver.calls.count == 2 && saver.calls[0] == saver.calls[1])
     }
 
-    @Test func serializesCollectionAndWaitsForCancellation() async {
-        let fixture = CollectorFixture(delay: .seconds(30))
-        let model = DiagnosticsModel(collector: fixture)
-        model.discover()
-        while !(await fixture.hasStarted()) { await Task.yield() }
-        model.collect()
-        #expect(await fixture.calls.count == 1)
-        model.cancel()
-        #expect(model.activity == .cancelling)
-        await model.waitForCompletion()
-        #expect(model.activity == .idle)
-        #expect(model.collection == nil)
-        #expect(model.message?.contains("cancelled") == true)
+    @Test func failedSaveKeepsArchiveForRetry() async {
+        let saver = SaverFixture(); saver.result = .failed
+        let model = DiagnosticsModel(saver: saver, collector: CollectorFixture())
+        model.collect(); await model.waitForCompletion()
+        #expect(model.archiveData != nil)
+        #expect(model.message?.contains("another location") == true)
     }
 
-    @Test func reportsAreRedactedUnlessExplicitlyRequested() async {
-        let fixture = CollectorFixture()
-        let model = DiagnosticsModel(collector: fixture)
+    @Test func cancellationAndDuplicateClicksDoNotOpenSaveOrReplacePreviousArchive() async throws {
+        let collector = CollectorFixture(), saver = SaverFixture()
+        let model = DiagnosticsModel(saver: saver, collector: collector)
+        model.collect(); await model.waitForCompletion()
+        let previous = try #require(model.archiveData)
+        await collector.setDelay(.seconds(30))
         model.collect()
-        await model.waitForCompletion()
-        #expect(model.collection?.report.privateDetailsIncluded == false)
-        model.includePrivate = true
-        model.remoteAddress = "192.0.2.5"
-        model.collect()
-        await model.waitForCompletion()
-        #expect(model.collection?.report.privateDetailsIncluded == true)
-        #expect(await fixture.calls.last?.remote?.value == "192.0.2.5")
+        while await collector.calls.count < 2 { await Task.yield() }
+        model.collect(); model.saveAgain()
+        model.cancel(); await model.waitForCompletion()
+        #expect(await collector.calls.count == 2)
+        #expect(saver.calls.count == 1)
+        #expect(model.archiveData == previous)
+        #expect(saver.cancelled && !model.isBusy)
+        #expect(model.message == "Collection cancelled.")
     }
 }

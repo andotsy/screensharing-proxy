@@ -2,110 +2,87 @@ import AppKit
 import Darwin
 import ProxyAppSupport
 import ProxyCore
-import SwiftUI
+import ServiceManagement
 
 @main
 enum NativeEntry {
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
         if arguments == ["--version"] { print("Screen Sharing Proxy \(ProxyBuild.version)"); return }
-        if arguments.count == 2, arguments[0] == "--smoke-test" {
-            runSmokeTest(output: arguments[1]); return
-        }
-        if arguments.count == 2, arguments[0] == "--smoke-pair" {
-            runSmokeTest(output: arguments[1], paired: true); return
-        }
-        NativeProxyApp.main()
-    }
-
-    private static func runSmokeTest(output: String, paired: Bool = false) {
         let app = NSApplication.shared
-        app.setActivationPolicy(.accessory)
-        let model = DiagnosticsModel()
-        let panel = PanelController(model: model)
-        panel.show()
-        if paired { model.captureBaseline() } else { model.discover() }
-        Task {
-            await model.waitForCompletion()
-            if paired {
-                guard model.hasBaseline else { exit(1) }
-                model.captureSession()
-                await model.waitForCompletion()
-                guard model.sessionReport != nil else { exit(1) }
-            }
-            guard panel.hasVisibleContent, let data = model.reportData,
-                  model.collection?.report.platform == "macOS",
-                  model.collection?.report.probes.isEmpty == false else {
-                FileHandle.standardError.write(Data("Native app smoke check failed.\n".utf8))
-                exit(1)
-            }
-            do {
-                try PrivateReportWriter.write(data, to: URL(fileURLWithPath: output))
-                print(paired ? "Native paired capture passed." : "Native window and automatic discovery passed.")
-                app.terminate(nil)
-            } catch {
-                FileHandle.standardError.write(Data("Native app report export failed.\n".utf8))
-                exit(1)
-            }
+        let delegate = AppDelegate()
+        if arguments.count == 2, arguments[0] == "--smoke-test" {
+            delegate.smokeDestination = URL(fileURLWithPath: arguments[1])
         }
+        app.delegate = delegate
+        app.setActivationPolicy(.regular)
         app.run()
+        withExtendedLifetime(delegate) {}
     }
-}
-
-struct NativeProxyApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    var body: some Scene {
-        MenuBarExtra {
-            Button("Open Screen Sharing Proxy…") { AppSession.shared.panel.show() }
-            Divider()
-            Button("Find Allowed Service") { AppSession.shared.model.discover() }
-                .disabled(AppSession.shared.model.isBusy)
-            Button("Collect Diagnostics") {
-                AppSession.shared.panel.show()
-                AppSession.shared.model.collect()
-            }.disabled(AppSession.shared.model.isBusy)
-            Divider()
-            Button("About Screen Sharing Proxy") { NSApp.orderFrontStandardAboutPanel(nil) }
-            Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
-        } label: {
-            Image(systemName: "arrow.triangle.branch")
-                .accessibilityLabel("Screen Sharing Proxy")
-                .help("Screen Sharing Proxy — service discovery and diagnostics")
-        }
-    }
-}
-
-final class AppSession {
-    static let shared = AppSession()
-    let model = DiagnosticsModel()
-    lazy var panel = PanelController(model: model)
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let saver = ArchiveSavePanel()
+    private lazy var model = DiagnosticsModel(saver: saver)
+    private lazy var panel = PanelController(model: model)
     private var quitting = false
+    var smokeDestination: URL?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let showDock = UserDefaults.standard.object(forKey: "showInDock") as? Bool ?? true
-        NSApp.setActivationPolicy(showDock ? .regular : .accessory)
-        if !Self.launchedAtLogin { AppSession.shared.panel.show() }
-        AppSession.shared.model.discover()
+        installMenu()
+        panel.show()
+        saver.parentWindow = panel.windowForSheet
+        // Earlier diagnostic alphas exposed this setting. Remove this app's old
+        // registration when upgrading; diagnostics now run only on demand.
+        if SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval {
+            do { try SMAppService.mainApp.unregister() }
+            catch { model.showError("Remove Screen Sharing Proxy from Login Items in System Settings to stop the old startup setting.") }
+        }
+        guard let smokeDestination else { return }
+        saver.smokeDestination = smokeDestination
+        model.collect()
+        Task {
+            await model.waitForCompletion()
+            guard panel.hasVisibleContent, saver.presented,
+                  FileManager.default.fileExists(atPath: smokeDestination.path),
+                  model.collection?.report.platform == "macOS",
+                  model.collection?.report.samples.count == 10 else {
+                FileHandle.standardError.write(Data("Native collection/save-panel check failed.\n".utf8)); exit(1)
+            }
+            print("Native collection, save dialog and ZIP export passed.")
+            NSApp.terminate(nil)
+        }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        AppSession.shared.panel.show(); return false
+        panel.show(); return false
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitting { return .terminateLater }
-        guard AppSession.shared.model.isBusy else { return .terminateNow }
+        guard model.isBusy else { return .terminateNow }
         quitting = true
-        Task {
-            await AppSession.shared.model.stop()
-            sender.reply(toApplicationShouldTerminate: true)
-        }
+        Task { await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
-    private static var launchedAtLogin: Bool {
-        guard let event = NSAppleEventManager.shared().currentAppleEvent,
-              event.eventID == 0x6f617070 else { return false }
-        return event.paramDescriptor(forKeyword: 0x70726474)?.enumCodeValue == 0x6c676974
+    private func installMenu() {
+        let menu = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Screen Sharing Proxy", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Screen Sharing Proxy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu; menu.addItem(appItem)
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit; menu.addItem(editItem)
+        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = windowMenu; menu.addItem(windowItem)
+        NSApp.mainMenu = menu
     }
 }

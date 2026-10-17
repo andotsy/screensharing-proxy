@@ -1,25 +1,21 @@
 # Install Screen Sharing Proxy
 
-Download `ScreenSharingProxy-v0.1.0-alpha.3-macOS-arm64.dmg` from the
-[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.3).
+Download `ScreenSharingProxy-v0.1.0-alpha.4-macOS-arm64.dmg` from the
+[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.4).
 Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 
 1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.
-2. Open **Screen Sharing Proxy** from Applications. Its window opens and searches
-   automatically for an explicitly allowed `proxyd`. The menu bar icon reopens
-   the window after you close it.
-3. On the **viewer Mac with the blocked service**, optionally enter the remote
-   Mac's numeric IP. Open **Diagnostics** and choose **Capture Baseline** before
-   connecting. Wait for it to finish.
-4. Start the High Performance connection, then choose **Capture During Session**
-   while it is starting or failing. Keep the attempt open while collection runs.
-5. **Save Report…** exports both captures together. Private addresses and paths
-   are redacted by default, using the same tokens across the pair. **Clear Captures**
-   starts a new pair and unlocks its remote IP/privacy options.
+2. Open **Screen Sharing Proxy** on the viewer Mac with the blocked service.
+3. Keep the Screen Sharing connection attempt open and click **Collect Diagnostics**.
+4. When the Save dialog appears, choose where to save the ZIP, then send that ZIP
+   to the person helping you. Private addresses and paths are hidden automatically.
+
+If you cancel the Save dialog, **Save ZIP Again…** saves the completed report
+without collecting again. Closing the window quits the app.
 
 **This is a diagnostic alpha. It does not forward Screen Sharing traffic yet.**
-The app leaves firewall and display settings unchanged. Launch at login is off
-unless you enable it in General.
+The app leaves firewall and display settings unchanged. It runs on demand and
+removes its own launch-at-login registration from older diagnostic alphas.
 
 The app is ad hoc signed and not notarized. If macOS blocks opening the downloaded
 app, open the included Terminal shortcut and run this command after installing

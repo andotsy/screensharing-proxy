@@ -3,27 +3,28 @@
 A native macOS project investigating a viewer-side relay for Apple's High
 Performance Screen Sharing.
 
-**Native app prerelease: `v0.1.0-alpha.3`.** Its macOS arm64 DMG contains
+**Native app prerelease: `v0.1.0-alpha.4`.** Its macOS arm64 DMG contains
 `ScreenSharingProxy.app`, a proxy icon, an Applications shortcut and an
 offline installation guide. See [installation](docs/INSTALL.md) and
-[release notes](docs/releases/0.1.0-alpha.3.md).
+[release notes](docs/releases/0.1.0-alpha.4.md).
 
-The app opens a native window and automatically discovers an explicitly allowed
-`proxyd`. It can collect, copy and save redacted diagnostics without Terminal.
+The app opens a simple diagnostics window. Collection includes automatic
+`proxyd` discovery. One button collects diagnostics and opens a Save dialog for a redacted ZIP.
 **Traffic forwarding remains unfinished.** The permitted service's forwarding
 interface must be identified on the viewer Mac before a backend is chosen.
 
 Implemented:
 
-- Native Connection, General and Diagnostics panes, a menu bar menu, Dock visibility
-  and optional launch at login. Collection supports cancellation and private export.
+- One-button collection, automatic ZIP Save dialog, cancellation and save retry.
+  No settings tabs, menu bar utility, Dock preference or login startup.
 
 - A read-only macOS diagnostic CLI: firewall entries, executable identities,
   launchd manifest candidates, and correlated TCP/UDP socket snapshots.
 - Performance component evidence for the viewer, server, session agent and
   `avconferenced`, including separate app/executable firewall rules, socket
   delegation entitlements, binding categories and visible host UDP-base settings.
-- Before/during captures in one export, with consistent redaction across the pair.
+- Ten socket snapshots per collection, including unattributed UDP sockets so no
+  remote IP entry is required. The ZIP includes diagnostics.json and README.txt.
 - Automatic discovery and selection of an explicitly allowed `proxyd`, including
   checks for global overrides, missing executables and ambiguous candidates.
 - Bounded subprocess output, monotonic deadlines, cancellation, process-group

@@ -80,7 +80,7 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             "Listed firewall rules do not prove effective permission, socket attribution or another filter's behavior.",
             "A manifest is configuration evidence, not proof that its service is running or supports forwarding.",
             "UDP purpose, media negotiation and successful presentation require a separate two-Mac experiment.",
-            "Unconnected UDP sockets have no known peer; they are included as unattributed listeners, not identified session traffic.",
+            "UDP sockets without a name, peer-filter or port match remain unattributed; inclusion does not identify them as session traffic.",
             "Process names, port hints and entitlements are candidates, not proof of media use. Socket delegation can make firewall attribution differ from lsof's owner.",
             "Local host preferences are not the remote Mac's settings or a measurement of the active session's UDP base. No packet contents are collected.",
         ]
@@ -199,6 +199,7 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                 else if options.remote.map({ socket.remote?.address == $0.value }) == true { selection = "remotePeerMatch" }
                 else if !hints.isEmpty { selection = "portHint" }
                 else if socket.transport == "UDP" && socket.remote == nil { selection = "unattributedUDPListener" }
+                else if socket.transport == "UDP" { selection = "unattributedUDPSocket" }
                 else { continue }
                 selected.append(.init(pid: socket.pid, executable: path.map { redactor.path($0) },
                     ownershipEvidence: stable ? "consistentProcessSnapshots" : "unresolved",
@@ -234,6 +235,36 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
             if !manifests.complete { report.limitations.append("Some launchd manifests were unreadable, oversized or beyond the scan limit.") }
         }
         if components.count > 16 { report.limitations.append("Only the first sixteen performance component paths were inspected.") }
+        let runtimePaths = Set(firewallEntries.map(\.path).filter { RuntimeEvidence.family($0) != nil })
+        if runtimePaths.count > 16 { report.limitations.append("Only the first sixteen Python/Ruby firewall targets were inspected.") }
+        for target in runtimePaths.sorted().prefix(16) {
+            if Task.isCancelled { break }
+            let bundle = target.lowercased().hasSuffix(".app")
+            var path: String? = bundle ? nil : target
+            if bundle, let data = Self.readManifest(target + "/Contents/Info.plist"),
+               let name = RuntimeEvidence.bundleExecutable(data) { path = target + "/Contents/MacOS/" + name }
+            let executable = path.map { executableInspector.inspect($0) }
+            let rules = Set(firewallEntries.filter { $0.path == target }.map(\.rule))
+            let listed = rules.count == 1 ? rules.first! : .unknown
+            var signatureVerified: Bool?, signingIdentifier: String?
+            if let path, executable?.accessible == true {
+                let verify = await runner.run(CommandSpec("/usr/bin/codesign", ["--verify", "--strict", path]))
+                let identity = await runner.run(CommandSpec("/usr/bin/codesign", ["--display", "--verbose=2", path]))
+                report.probes += [Self.summary("runtime.\(redactor.path(target)).signature", verify),
+                                  Self.summary("runtime.\(redactor.path(target)).identity", identity)]
+                signatureVerified = verify.outcome == .exited ? verify.succeeded : nil
+                if identity.complete {
+                    signingIdentifier = String(decoding: identity.errorOutput, as: UTF8.self).split(separator: "\n")
+                        .first { $0.hasPrefix("Identifier=") }.map { String($0.dropFirst("Identifier=".count)) }
+                }
+            }
+            report.runtimeCandidates.append(.init(family: RuntimeEvidence.family(target)!,
+                name: URL(fileURLWithPath: target).lastPathComponent, firewallTarget: redactor.path(target),
+                targetKind: bundle ? "appBundle" : "executable", listedRule: listed.rawValue,
+                executable: path.map { redactor.path($0) }, resolvedExecutable: executable.map { redactor.path($0.resolvedPath) },
+                executableAccessible: executable?.accessible, signatureVerified: signatureVerified, signingIdentifier: signingIdentifier))
+        }
+        report.limitations.append("Python/Ruby firewall targets are runtime candidates, not verified relays. They were not executed; bundle rules, executable aliases and launch stubs require runtime attribution testing.")
         for path in components.keys.sorted().prefix(16) {
             if Task.isCancelled { break }
             let executable = executableInspector.inspect(path)
@@ -303,7 +334,7 @@ public struct DiagnosticsCollector: DiagnosticCollecting {
                 sources: candidates[path]!.sorted(), incomingRule: incomingRule, ruleSource: ruleSource,
                 runningObserved: candidates[path]!.contains("processSnapshot"), executableAccessible: executable.accessible))
         }
-        if candidates.isEmpty { report.limitations.append("No exact proxyd executable was identified; the recalled name remains unconfirmed.") }
+        if candidates.isEmpty { report.limitations.append("No exact proxyd executable was identified. Python/Ruby firewall targets, if present, are listed separately in runtimeCandidates.") }
         if Task.isCancelled { report.limitations.append("Collection was cancelled; this report is partial.") }
         // A truncated candidate scan cannot establish uniqueness, and a cancelled
         // preflight must never return a usable selection to an app's startup path.

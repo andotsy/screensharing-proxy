@@ -1,7 +1,7 @@
 # Screen Sharing Proxy — implementation plan
 
 Planning date: 2026-10-17. Status: first infrastructure implementation completed;
-transport experiment pending. Native diagnostic app alpha 2 is published.
+transport experiment pending. Diagnostic UX is now one-button collection and automatic ZIP saving (alpha 4).
 See `HANDOFF.md` for implementation and `HIGH_PERFORMANCE_RESEARCH.md` for the
 subsequent Apple-documentation and macOS 26.7.1 binary research.
 
@@ -51,13 +51,13 @@ public relay service is planned.
 
 | Item | Evidence / conclusion |
 | --- | --- |
-| Native UI and release design | Native diagnostic app and DMG are published as alpha 2. |
+| Native UI and release design | Native diagnostic app with one-button ZIP export and a styled DMG. |
 | High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. Independent implementation identifies encrypted media with feedback multiplexed on media ports. Target-session flows remain unmeasured. |
 | Media addressing | Supplied server derives local/peer IPs from TCP and initializes media ports from managed `portBase` (default 5900). Viewer binding behavior remains unknown. |
 | Firewall problem | Reported by the user; not independently reproduced. The exact firewall implementation and receiving executable remain to be identified. |
 | Allowed process | The user recalls that `proxyd`, rather than `/usr/bin/python3`, is allowed. Its exact identity, supported interfaces and actual permission are unconfirmed. |
 | Development host | Debian Linux x86_64 with verified Swift 6.2 and Python. Native builds/app smoke tests run on GitHub macOS CI. |
-| Current application state | Native diagnostic GUI/CLI, portable process/protocol/lifecycle core and 55 tests exist. No functioning relay or successful proxied session is established. |
+| Current application state | Native diagnostic GUI/CLI, portable process/protocol/lifecycle core and 57 tests exist. No functioning relay or successful proxied session is established. |
 
 **Do not design around an assumed TCP-only solution.** TCP forwarding may carry
 login/control while video or feedback continues directly to a blocked UDP socket.

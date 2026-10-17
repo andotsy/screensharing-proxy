@@ -4,18 +4,15 @@ cd "$(dirname "$0")/.."
 version=${SSP_VERSION:?Set SSP_VERSION to the release version}
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
 bash Packaging/build-app.sh
-stage=$(mktemp -d "$PWD/.build/app-stage.XXXXXX")
-trap 'rm -rf "$stage"' EXIT
-ditto .build/native-bundle/ScreenSharingProxy.app "$stage/ScreenSharingProxy.app"
-cp Packaging/README.html "$stage/README.html"
-ln -s /Applications "$stage/Applications"
-ln -s /System/Applications/Utilities/Terminal.app "$stage/Terminal"
 mkdir -p dist
 dmg="dist/ScreenSharingProxy-v$version-macOS-arm64.dmg"
 if [[ -e "$dmg" ]]; then
     printf 'The output DMG already exists; use a new version or remove the earlier local build.\n' >&2
     exit 1
 fi
-hdiutil create -volname 'Screen Sharing Proxy' -fs HFS+ -format UDZO -srcfolder "$stage" "$dmg"
+python3 -m venv .build/dmg-venv
+.build/dmg-venv/bin/python -m pip install --disable-pip-version-check -r Packaging/requirements.txt
+swift -warnings-as-errors Packaging/dmg-background.swift .build/dmg-background .build/native-bundle/ScreenSharingProxy.app
+.build/dmg-venv/bin/dmgbuild -s Packaging/dmg-settings.py "Screen Sharing Proxy v$version" "$dmg"
 hdiutil verify "$dmg"
 printf 'Built %s\n' "$dmg"

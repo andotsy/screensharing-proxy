@@ -5,22 +5,25 @@ the other Mac. A report helps identify the recalled `proxyd` and the relevant
 receiving sockets. It does not establish a working relay or diagnose a firewall
 drop from a missing packet alone.
 
-The recommended collection is the native app's paired workflow from alpha 3:
+The recommended collection is the native app from alpha 4:
 
-1. On the viewer, enter the remote IP if known and select privacy options.
-2. In Diagnostics, **Capture Baseline** with Screen Sharing disconnected.
-3. After the baseline finishes, start the High Performance connection. Choose
-   **Capture During Session** while the attempt is starting or failing and keep
-   the attempt open while ten socket snapshots are collected.
-4. **Save Report…** exports a `screenSharingCapturePair` envelope (schema 1),
-   containing `baseline` and `duringSession` reports (each schema 2). A baseline-only
-   export is allowed, with no `duringSession` field yet. **Clear Captures** resets
-   the pair. Cancellation keeps the last completed export.
+1. Open the app on the viewer and keep the Screen Sharing connection attempt open.
+2. Click **Collect Diagnostics**. Collection takes ten socket snapshots.
+3. The Save dialog opens automatically. Save the ZIP and forward it for investigation.
 
-Both captures use the same remote IP, privacy setting and in-memory redaction
-scope. Matching address/path tokens are comparable only when `redactionScopeID`
-matches. Resetting the pair creates a fresh scope; no mapping is saved. The pair
-labels when the user collected evidence, not whether High Performance succeeded.
+The ZIP contains `diagnostics.json` (schema 2) and `README.txt`. Private addresses
+and paths are redacted automatically. No manual remote IP, privacy choice,
+baseline or phase selection is needed. All visible UDP sockets are retained;
+unknown owners/ports stay unattributed rather than being labelled session traffic.
+Saving uses owner-only permissions and atomic replacement after Save dialog
+confirmation. If saving is cancelled or fails, **Save ZIP Again…** reuses the
+completed archive. Cancelling collection preserves the previous completed archive.
+Closing the window quits, waits for owned probes to stop, and cancels an open
+save sheet. There are no Dock/startup settings or background menu bar utility.
+The app removes its own legacy launch-at-login registration when upgrading.
+
+Alpha 3 used a paired capture UI; it has been replaced by this one-action flow.
+Older paired exports remain interpretable using their `redactionScopeID`.
 
 For CLI collection, use a local checkout with Swift 6.2+ and Xcode 26.2 (or the corresponding Swift
 toolchain). Building and running this collector requires no Python. From the
@@ -37,7 +40,15 @@ incoming rules. When a candidate has no recognized list entry, it queries
 `socketfilterfw --getappblocked PATH` using the discovered path. No path input or
 manual configuration is required. Unknown query output is not interpreted as allow.
 
-A unique allowed executable is selected. If several distinct executables are
+`runtimeCandidates` separately records Python/Ruby entries from the firewall
+list, including versioned executables and Python.app bundles. It records the
+listed rule, resolved executable/accessibility and signing identity where readable;
+private paths remain redacted. Bundle executables come from bounded Info.plist
+metadata, never guessed names. These runtimes are not executed or promoted to
+verified relays. A `proxyDiscovery.status` of `notFound` means only that no exact
+`proxyd` was found; it does not mean no Python/Ruby runtime is allowed.
+
+For exact `proxyd` discovery, a unique allowed executable is selected. If several distinct executables are
 allowed, the sole observed running one is preferred; multiple running matches
 or multiple inactive matches remain ambiguous. Aliases of the same file are
 deduplicated, while conflicting alias rules prevent selection. Global block-all,
@@ -69,7 +80,7 @@ address family/peer selected by Screen Sharing needs its own observation.
 For comparison, collect another report with Screen Sharing disconnected using
 a **new output filename** and `--phase baseline`. Independent CLI invocations
 have separate redaction scopes; do not compare address/path token numbers between
-them. Use the native app for a pair with matching tokens. The CLI refuses to overwrite existing files or follow
+them. The native app exports a single collection with ten snapshots. The CLI refuses to overwrite existing files or follow
 an output symlink. `--samples` is 1–10; `--interval` is 0.2–5 seconds. Each probe
 has a three-second deadline; sample cadence includes probe execution time, so
 these are not fixed-frequency packet measurements. Ctrl-C cancels the active
@@ -120,19 +131,20 @@ Default reports replace private addresses and non-system executable paths with
 consistent tokens within that report. System executable paths, ports, PIDs,
 service labels and signing identifiers remain visible because they identify the
 mechanism being investigated. Token mappings are not exported; tokens are not
-stable across independent reports. Native app pairs explicitly share a
-`redactionScopeID` and therefore a token map for those two captures. `--include-private` explicitly retains addresses
+stable across independent collections. The ten snapshots in one report share a
+`redactionScopeID`. Older alpha-3 pairs also share a scope. `--include-private` explicitly retains addresses
 and full paths for local investigation. Raw stdout/stderr from probes is never
 included in the report. Report files are mode 0600 regardless of the current umask.
 
 Socket selection includes known Screen Sharing/media/proxyd names, connected
 sockets matching `--remote`, default TCP 5900 / UDP 5900–5902 port hints,
 UDP base/base+1/base+2 hints from the visible local host preference, and all
-unconnected UDP sockets. Port arithmetic never wraps past 65535. Port hints may
+other UDP sockets. Port arithmetic never wraps past 65535. Port hints may
 match unrelated traffic and are not protocol identification. `localAddressKind`
 and `remoteAddressKind` preserve wildcard/loopback/non-loopback distinctions even
-when the literal address is redacted. Unconnected UDP without another selection reason is
-marked `unattributedUDPListener`: an unconnected UDP socket has no known peer and
+when the literal address is redacted. UDP without another match is marked
+`unattributedUDPSocket` when connected or `unattributedUDPListener` otherwise.
+An unconnected UDP socket has no known peer and
 may belong to an unrelated app. Unresolved process identities stay unresolved;
 two consistent snapshots reduce races but do not make collection atomic.
 

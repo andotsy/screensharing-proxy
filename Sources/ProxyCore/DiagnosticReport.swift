@@ -16,6 +16,7 @@ public struct DiagnosticReport: Sendable, Encodable {
     public var proxyDiscovery: DiscoverySummary?
     public var services: [ServiceSummary] = []
     public var components: [ComponentSummary] = []
+    public var runtimeCandidates: [RuntimeCandidateSummary] = []
     public var mediaPortConfiguration = MediaPortConfiguration()
     public var samples: [SocketSample] = []
     public var limitations: [String] = []
@@ -78,6 +79,20 @@ public struct DiagnosticReport: Sendable, Encodable {
         public let signingIdentifier: String?
         public let signatureVerified: Bool?
         public let socketDelegationEntitlement: Bool?
+    }
+    public struct RuntimeCandidateSummary: Sendable, Encodable {
+        public let family: String
+        public let name: String
+        public let firewallTarget: String
+        public let targetKind: String
+        public let listedRule: String
+        public let executable: String?
+        public let resolvedExecutable: String?
+        public let executableAccessible: Bool?
+        public let signatureVerified: Bool?
+        public let signingIdentifier: String?
+        public let executionTested = false
+        public let forwardingVerified = false
     }
     public struct ComponentFirewallCheck: Sendable, Codable {
         public let target: String

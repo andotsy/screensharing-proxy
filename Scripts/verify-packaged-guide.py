@@ -2,6 +2,7 @@
 from html.parser import HTMLParser
 from pathlib import Path
 import json
+import zipfile
 import plistlib
 import shlex
 import subprocess
@@ -46,10 +47,10 @@ def main():
         app.parent.mkdir()
         subprocess.run(["/usr/bin/ditto", str(volume / app.name), str(app)], check=True)
         subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
-        report = root / "native-report.json"
+        report = root / "native-report.zip"
         command = snippet.replace(app_literal, shlex.quote(str(app)))
         # Keep the guide's launch command, with a test-only argument so the
-        # launched native app exports evidence and quits after discovery.
+        # launched native app exports evidence and quits after collection and saving.
         command = command.replace('/usr/bin/open "$app"',
             '/usr/bin/open -W "$app" --args --smoke-test ' + shlex.quote(str(report)))
         script = root / "guide.zsh"
@@ -57,7 +58,9 @@ def main():
         subprocess.run(["/bin/zsh", "-n", str(script)], check=True)
         result = subprocess.run(["/bin/zsh", str(script)], capture_output=True, text=True, timeout=90)
         assert result.returncode == 0, result.stderr
-        assert json.loads(report.read_text())["platform"] == "macOS"
+        with zipfile.ZipFile(report) as archive:
+            assert archive.testzip() is None
+            assert json.loads(archive.read("diagnostics.json"))["platform"] == "macOS"
         subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
         quarantine = subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(app)], capture_output=True)
         assert quarantine.returncode != 0

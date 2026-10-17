@@ -1,3 +1,3 @@
 public enum ProxyBuild {
-    public static let version = "0.1.0-alpha.3"
+    public static let version = "0.1.0-alpha.4"
 }

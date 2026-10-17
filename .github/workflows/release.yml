@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing app alpha tag (for example v0.1.0-alpha.3)'
+        description: 'Existing app alpha tag (for example v0.1.0-alpha.4)'
         required: true
         type: string
 
@@ -46,6 +46,10 @@ jobs:
           echo "SSP_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
           echo "DMG_NAME=ScreenSharingProxy-$RELEASE_TAG-macOS-arm64.dmg" >> "$GITHUB_ENV"
 
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
       - name: Test and build the app DMG
         run: |
           swift build -Xswiftc -warnings-as-errors
@@ -69,6 +73,7 @@ jobs:
           test -L "$mount_path/Terminal"
           test "$(readlink "$mount_path/Terminal")" = /System/Applications/Utilities/Terminal.app
           cmp Packaging/README.html "$mount_path/README.html"
+          .build/dmg-venv/bin/python Scripts/verify-dmg-layout.py "$mount_path"
           python3 Scripts/verify-packaged-guide.py "$mount_path"
           cd dist
           shasum -a 256 "$DMG_NAME" > SHA256SUMS

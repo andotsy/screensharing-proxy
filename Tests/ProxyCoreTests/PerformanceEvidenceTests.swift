@@ -21,6 +21,7 @@ private actor PerformanceRunner: CommandRunning {
             text = "p43\0cScreen Sharing\0\nf3\0tIPv4\0PUDP\0n127.0.0.2:5901\0\n"
                 + "p44\0cunknown\0\nf4\0tIPv4\0PUDP\0n192.0.2.4:6101->192.0.2.5:6101\0\n"
                 + "f5\0tIPv4\0PTCP\0n192.0.2.4:40000->192.0.2.5:5900\0TST=ESTABLISHED\0\n"
+                + "f6\0tIPv4\0PUDP\0n192.0.2.4:6109->192.0.2.5:6109\0\n"
         case "/usr/bin/defaults": text = "{ portBase = 6100; credential = \"secret-value\"; }"
         case "/usr/libexec/ApplicationFirewall/socketfilterfw":
             if spec.arguments == ["--listapps"] {
@@ -66,6 +67,7 @@ struct PerformanceEvidenceTests {
         #expect(report.samples[0].sockets[1].selectionReason == "portHint")
         #expect(report.samples[0].sockets[1].portHints == ["localHostPreferencePortRange"])
         #expect(report.samples[0].sockets[2].portHints == ["documentedDefaultPortRange"])
+        #expect(report.samples[0].sockets[3].selectionReason == "unattributedUDPSocket")
         #expect(report.mediaPortConfiguration.observedHostPreferenceUDPBase == 6100)
         #expect(report.mediaPortConfiguration.activeSessionUDPBase == "unknown")
         let json = String(decoding: try report.json(), as: UTF8.self)

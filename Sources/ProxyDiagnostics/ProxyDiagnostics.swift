@@ -96,7 +96,7 @@ struct ProxyDiagnostics {
     Reports redact private addresses/paths by default. No packet payloads, process
     arguments or environment variables are collected. Ctrl-C writes a partial report.
     A report is diagnostic evidence, not proof of High Performance relay readiness.
-    Use the app for paired captures with comparable redacted address/path tokens.
+    The app collects ten snapshots and opens a Save dialog for a ZIP report.
     Exit codes: 0 collected/selected, 2 unsupported platform, 3 discovery unresolved,
     64 invalid invocation/output error, 130 interrupted (partial report).
     """
