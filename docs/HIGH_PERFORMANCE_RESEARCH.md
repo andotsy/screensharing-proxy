@@ -7,7 +7,9 @@ remaining receive/source-validation limits. The incoming-only relay subsequently
 failed on the previously working pair, with gray video and host RTCP timeouts.
 The new [loopback candidate](LOOPBACK_EXPERIMENT_GUIDE.md) forwards TCP and both
 UDP directions with matching local peer tuples. Native socket tests pass; a
-complete live session remains unproven.
+complete live session remains unproven. Its first live tests subsequently failed
+after the login prompt without reported UDP exchange. The [current handoff](HANDOFF.md)
+records the supervisor fix and additional evidence needed for the address errors.
 
 Research date: 2026-10-17. This updates the preliminary transport hypothesis used
 for the diagnostic alphas. It is static analysis and documented research, not a

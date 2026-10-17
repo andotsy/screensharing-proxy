@@ -1,7 +1,13 @@
 # Transport findings
 
-Status on 2026-10-18: **incoming-only live test failed; a peer-preserving loopback
-candidate passes bidirectional native-socket tests but remains unproven live**.
+Status on 2026-10-18: **both incoming-only and loopback live tests failed**.
+The loopback attempt reached a login prompt but recorded no UDP exchange. Two
+reports had `localAddressUnavailable` without an operation label. A separate
+`incompatibleProtocol` report matches a reproduced clean-exit supervisor race,
+now fixed. Schema-3 adds TCP progress, final failure counters and fixed operation
+labels to locate the remaining error; it is not a proven connection fix.
+See [the current handoff](HANDOFF.md).
+
 The previously working 26.7.1 pair produced gray video and a generic stream error
 on repeated incoming-only attempts. Ruby received/submitted media, while host
 logs in the matching minute reported missing RTCP feedback. This is not evidence

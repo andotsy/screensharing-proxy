@@ -1,6 +1,13 @@
 # Ruby relay experiment
 
-Current status (2026-10-18): the incoming-only candidate **failed live on the
+Current status (2026-10-18): the loopback candidate also failed live after a login
+prompt, before any reported UDP exchange. Its schema-2 reports lacked the socket
+operation needed to diagnose two `localAddressUnavailable` failures. A confirmed
+supervisor clean-exit race is fixed; schema-3 adds precise, private failure
+context and TCP progress. These are diagnostic repairs, not a successful native
+session. See [the current handoff](HANDOFF.md) and [guide](LOOPBACK_EXPERIMENT_GUIDE.md).
+
+Earlier status: the incoming-only candidate **failed live on the
 previously working pair**. The user observed gray video and a generic stream
 error on repeated attempts; host logs reported missing RTCP feedback. The cause
 is not established by relay counters. Read the [native follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md).

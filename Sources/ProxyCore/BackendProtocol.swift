@@ -23,13 +23,26 @@ public enum BackendEvent: Codable, Sendable, Equatable {
     case ready
     case traffic(receivedBytes: UInt64, sentBytes: UInt64)
     case media(receivedDatagrams: UInt64, sentDatagrams: UInt64, droppedDatagrams: UInt64)
+    case control(nativeAccepted: Bool, remoteConnected: Bool, nativeReadClosed: Bool, remoteReadClosed: Bool)
+    case failureContext(operation: BackendOperation, systemError: BackendSystemError?)
     case stopped
     case failed(code: BackendFailureCode)
 }
 
+/// Fixed labels only; no socket addresses, exception strings or payloads.
+public enum BackendOperation: String, Codable, Sendable {
+    case configuration, socketReservation, routeCheck, viewerAccept, hostBind, hostConnect
+    case tcpRead, tcpWrite, udpReceive, udpSend, tcpShutdown, parentInput, eventOutput, waiting
+}
+
+public enum BackendSystemError: String, Codable, Sendable {
+    case addressUnavailable, addressInUse, connectionRefused, connectionReset
+    case networkUnreachable, hostUnreachable, permissionDenied, other
+}
+
 public enum BackendFailureCode: String, Codable, Sendable {
     case unavailable, permissionUnknown, addressInUse, connectFailed, incompatibleProtocol, internalFailure
-    case invalidConfiguration, localAddressUnavailable, nativeSourceMismatch, connectionTimedOut
+    case invalidConfiguration, localAddressUnavailable, nativeSourceMismatch, connectionTimedOut, routeChanged
 }
 
 public enum BackendProtocolError: Error, Equatable {
@@ -150,6 +163,8 @@ public struct SessionLifecycle: Sendable {
             guard [.starting, .listening, .relaying].contains(phase) else { throw TransitionError.invalidTransition }
             failure = code
             phase = .stopping // Keep the slot occupied until actual process exit.
+        case .control, .failureContext:
+            break // Experiment evidence does not promote native-session validity.
         }
     }
 

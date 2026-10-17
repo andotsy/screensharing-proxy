@@ -26,9 +26,9 @@ OPTIONS, REST = PARSER.parse_known_args()
 
 
 class Child:
-    def __init__(self, config):
+    def __init__(self, config, script=None):
         self.process = subprocess.Popen(
-            [OPTIONS.ruby, '--disable-gems', str(OPTIONS.script)],
+            [OPTIONS.ruby, '--disable-gems', str(script or OPTIONS.script)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
         self.events = queue.Queue(maxsize=128)

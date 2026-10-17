@@ -49,6 +49,7 @@ module ScreenSharingRelay
     end
 
     def prepare
+      @control_enabled = true
       @udp_routes = {}
       3.times do |offset|
         number = @base + offset
@@ -83,7 +84,8 @@ module ScreenSharingRelay
       now = ScreenSharingRelay.now
       raise Failure.new('connectionTimedOut') if now >= @expires
       if now >= @route_check
-        raise Failure.new('localAddressUnavailable') unless route_address == @external
+        @operation = 'routeCheck'
+        raise Failure.new('routeChanged') unless route_address == @external
         @route_check = now + 5
       end
       super

@@ -58,6 +58,7 @@ module ScreenSharingRelay
     def forward_udp(socket)
       64.times do
         begin
+          @operation = 'udpReceive'
           packet = socket.recvmsg_nonblock(DATAGRAM_LIMIT, 0, 0, exception: false)
           break if packet == :wait_readable
           data, _sender, flags = packet
@@ -68,6 +69,7 @@ module ScreenSharingRelay
             next
           end
           injector = @udp_routes.fetch(socket).first
+          @operation = 'udpSend'
           sent = injector.sendmsg_nonblock(data, 0, nil, exception: false)
           if sent == data.bytesize
             @sent += sent
@@ -83,16 +85,19 @@ module ScreenSharingRelay
     end
 
     def tick
+      @operation = 'waiting'
       now = ScreenSharingRelay.now
       raise Failure.new('connectionTimedOut') if now >= @expires
       if now >= @route_check
-        raise Failure.new('localAddressUnavailable') unless route_address == @external
+        @operation = 'routeCheck'
+        raise Failure.new('routeChanged') unless route_address == @external
         @route_check = now + 5
       end
       selected = IO.select([@input] + @udp_routes.keys, @out.empty? ? [] : [@output], nil, 0.1)
       if selected
         readable, writable = selected
         if readable.include?(@input)
+          @operation = 'parentInput'
           command = @input.read_nonblock(1, exception: false)
           if command.nil?
             @stopping = true

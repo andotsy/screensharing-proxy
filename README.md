@@ -19,7 +19,10 @@ and stream disconnection despite received traffic, with host RTCP timeouts.
 The new [loopback experiment](docs/LOOPBACK_EXPERIMENT_GUIDE.md) forwards TCP and
 both UDP directions while preserving the viewer's expected local peer. It runs on
 the **controlling Mac**, not the Mac whose screen is shared. It does not enable
-the diagnostic app's disabled features.
+the diagnostic app's disabled features. Its first live tests also failed after
+the login prompt, before reported UDP traffic. The current revision fixes a
+shutdown-reporting race and adds precise failure context; connection setup is
+still unresolved.
 
 Implemented:
 

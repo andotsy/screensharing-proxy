@@ -12,6 +12,7 @@ import select
 import socket
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 
@@ -147,7 +148,14 @@ class LoopbackTests(unittest.TestCase):
                 received.extend(part)
             self.assertEqual(bytes(received), reply)
             future.result(timeout=5)
-        child.event('stopped')
+        final = {}
+        while 'stopped' not in final:
+            event = child.events.get(timeout=3)['event']
+            self.assertNotIn('failed', event)
+            final.update(event)
+        self.assertEqual(final['traffic'], {'receivedBytes': len(reply) + 5, 'sentBytes': len(request)})
+        self.assertEqual(final['control'], {'nativeAccepted': True, 'remoteConnected': True,
+                                          'nativeReadClosed': True, 'remoteReadClosed': True})
         self.assertEqual(child.process.wait(timeout=3), 0)
 
     def test_existing_owners_refuse_startup_and_partial_reservations_are_released(self):
@@ -217,6 +225,74 @@ class LoopbackTests(unittest.TestCase):
         next_client.sendall(b'new attempt')
         self.assertEqual(next_server.recv(11), b'new attempt')
         self.assertIsNone(next_child.process.poll())
+
+    def test_failure_identifies_outbound_bind_without_exposing_addresses(self):
+        # Simulate a source disappearing after UDP reservation, without changing
+        # any interface. Exercise the actual failing TCP bind and final events.
+        script = SUPPORT['OPTIONS'].script
+        with tempfile.TemporaryDirectory(prefix='ssp-failure-fixture-') as directory:
+            wrapper = Path(directory) / 'fixture.rb'
+            wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module MissingSourceFixture
+  def prepare
+    super
+    @external = '192.0.2.254'
+  end
+end
+ScreenSharingRelay::LoopbackRelay.prepend(MissingSourceFixture)
+exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
+""")
+            child = Child(self.config, script=wrapper)
+            self.children.append(child)
+            child.event('ready')
+            with socket.socket() as client:
+                client.connect(('127.0.0.1', self.listener_port))
+                self.assertEqual(child.event('control'), {
+                    'nativeAccepted': True, 'remoteConnected': False,
+                    'nativeReadClosed': False, 'remoteReadClosed': False})
+                context = child.event('failureContext')
+                self.assertEqual(context, {'operation': 'hostBind', 'systemError': 'addressUnavailable'})
+                self.assertNotIn('192.0.2.254', json.dumps(context))
+                self.assertNotIn(directory, json.dumps(context))
+                self.assertEqual(child.event('failed')['code'], 'localAddressUnavailable')
+                self.assertEqual(child.process.wait(timeout=3), 1)
+
+    def test_route_change_has_a_distinct_failure(self):
+        script = SUPPORT['OPTIONS'].script
+        with tempfile.TemporaryDirectory(prefix='ssp-route-fixture-') as directory:
+            wrapper = Path(directory) / 'fixture.rb'
+            wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module ChangedRouteFixture
+  def route_address
+    @ready ? '192.0.2.254' : super
+  end
+end
+ScreenSharingRelay::LoopbackRelay.prepend(ChangedRouteFixture)
+exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
+""")
+            child = Child(self.config, script=wrapper)
+            self.children.append(child)
+            child.event('ready')
+            context = child.event('failureContext', timeout=7)
+            self.assertEqual(context, {'operation': 'routeCheck', 'systemError': None})
+            self.assertEqual(child.event('failed')['code'], 'routeChanged')
+            self.assertEqual(child.process.wait(timeout=3), 1)
+
+    def test_refused_host_connection_reports_connect_stage(self):
+        self.remote.close()
+        child = self.start()
+        child.event('ready')
+        with socket.socket() as client:
+            client.connect(('127.0.0.1', self.listener_port))
+            self.assertEqual(child.event('control'), {
+                'nativeAccepted': True, 'remoteConnected': False,
+                'nativeReadClosed': False, 'remoteReadClosed': False})
+            self.assertEqual(child.event('failureContext'), {
+                'operation': 'hostConnect', 'systemError': 'connectionRefused'})
+            self.assertEqual(child.event('failed')['code'], 'connectFailed')
+            self.assertEqual(child.process.wait(timeout=3), 1)
 
     @unittest.skipUnless(OPTIONS.native_helper, 'Supply the actual Apple helper')
     def test_actual_apple_sockets_exchange_through_real_ruby_on_all_channels(self):

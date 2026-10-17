@@ -131,4 +131,66 @@ private final class RelayEvents: @unchecked Sendable {
             configuration: .init(sessionID: UUID(), remoteAddress: "192.0.2.1"), onEvent: { _ in })
         #expect(result == .failed(.incompatibleProtocol))
     }
+
+    @Test func runnerAllowsStoppedOutputToCloseBeforeProcessExit() async throws {
+        guard let ruby else { return }
+        let script = try fixture("""
+        emit(config, 'ready')
+        emit(config, 'stopped')
+        STDOUT.close
+        sleep 0.2
+        """)
+        defer { try? FileManager.default.removeItem(at: script.deletingLastPathComponent()) }
+        let result = await RubyRelayRunner(executable: ruby, script: script.path).run(
+            configuration: .init(sessionID: UUID(), remoteAddress: "192.0.2.1"), onEvent: { _ in })
+        #expect(result == .exited(0))
+    }
+
+    @Test func runnerPreservesFailureWhenOutputClosesBeforeProcessExit() async throws {
+        guard let ruby else { return }
+        let script = try fixture("""
+        emit(config, 'ready')
+        emit(config, 'failed', 'code' => 'localAddressUnavailable')
+        STDOUT.close
+        sleep 0.2
+        exit 1
+        """)
+        defer { try? FileManager.default.removeItem(at: script.deletingLastPathComponent()) }
+        let result = await RubyRelayRunner(executable: ruby, script: script.path).run(
+            configuration: .init(sessionID: UUID(), remoteAddress: "192.0.2.1"), onEvent: { _ in })
+        #expect(result == .failed(.localAddressUnavailable))
+    }
+
+    @Test func runnerStillRejectsOutputEOFWithoutATerminalEvent() async throws {
+        guard let ruby else { return }
+        let script = try fixture("""
+        emit(config, 'ready')
+        STDOUT.close
+        sleep 0.2
+        """)
+        defer { try? FileManager.default.removeItem(at: script.deletingLastPathComponent()) }
+        let result = await RubyRelayRunner(executable: ruby, script: script.path).run(
+            configuration: .init(sessionID: UUID(), remoteAddress: "192.0.2.1"), onEvent: { _ in })
+        #expect(result == .failed(.incompatibleProtocol))
+    }
+
+    @Test func runnerCarriesPrivateFailureContextAndControlProgress() async throws {
+        guard let ruby else { return }
+        let script = try fixture("""
+        emit(config, 'ready')
+        emit(config, 'control', 'nativeAccepted' => true, 'remoteConnected' => false,
+             'nativeReadClosed' => false, 'remoteReadClosed' => false)
+        emit(config, 'failureContext', 'operation' => 'hostBind', 'systemError' => 'addressUnavailable')
+        emit(config, 'failed', 'code' => 'localAddressUnavailable')
+        exit 1
+        """)
+        defer { try? FileManager.default.removeItem(at: script.deletingLastPathComponent()) }
+        let events = RelayEvents()
+        let result = await RubyRelayRunner(executable: ruby, script: script.path).run(
+            configuration: .init(sessionID: UUID(), remoteAddress: "192.0.2.1"), onEvent: { events.append($0) })
+        #expect(result == .failed(.localAddressUnavailable))
+        #expect(events.events.contains { $0.event == .control(nativeAccepted: true, remoteConnected: false,
+                                                             nativeReadClosed: false, remoteReadClosed: false) })
+        #expect(events.events.contains { $0.event == .failureContext(operation: .hostBind, systemError: .addressUnavailable) })
+    }
 }

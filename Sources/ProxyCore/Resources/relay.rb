@@ -40,7 +40,9 @@ module ScreenSharingRelay
     end
 
     def run
+      @operation = 'configuration'
       configure(read_configuration)
+      @operation = 'socketReservation'
       prepare
       event('ready', {})
       @last_status = ScreenSharingRelay.now
@@ -52,22 +54,23 @@ module ScreenSharingRelay
       event('stopped', {})
       0
     rescue Failure => e
-      event('failed', { 'code' => e.code })
+      failure(e.code, e)
       1
-    rescue Errno::EADDRINUSE
-      event('failed', { 'code' => 'addressInUse' })
+    rescue Errno::EADDRINUSE => e
+      failure('addressInUse', e)
       1
-    rescue Errno::EADDRNOTAVAIL
-      event('failed', { 'code' => 'localAddressUnavailable' })
+    rescue Errno::EADDRNOTAVAIL => e
+      failure('localAddressUnavailable', e)
       1
-    rescue Errno::EPIPE, IOError
+    rescue Errno::EPIPE, IOError => e
+      failure('connectFailed', e) unless @operation == 'eventOutput'
       1
-    rescue SystemCallError
-      event('failed', { 'code' => 'connectFailed' })
+    rescue SystemCallError => e
+      failure('connectFailed', e)
       1
     rescue StandardError
       # Exception strings can contain endpoints and user paths. Never emit them.
-      event('failed', { 'code' => 'internalFailure' })
+      failure('internalFailure')
       1
     ensure
       @owned.each { |socket| socket.close unless socket.closed? }
@@ -160,6 +163,7 @@ module ScreenSharingRelay
     end
 
     def prepare
+      @control_enabled = true
       @udp_routes = {}
       3.times do |offset|
         local = udp(@local, @native, @base + offset)
@@ -186,14 +190,38 @@ module ScreenSharingRelay
     def status
       event('traffic', 'receivedBytes' => @received, 'sentBytes' => @sent)
       event('media', 'receivedDatagrams' => @udp_received, 'sentDatagrams' => @udp_sent, 'droppedDatagrams' => @udp_dropped)
+      if @control_enabled
+        event('control', 'nativeAccepted' => !@client.nil?, 'remoteConnected' => @remote_connected == true,
+              'nativeReadClosed' => @eof[@client] == true, 'remoteReadClosed' => @eof[@server] == true)
+      end
+    end
+
+    def failure(code, error = nil)
+      system_error = case error
+                     when Errno::EADDRNOTAVAIL then 'addressUnavailable'
+                     when Errno::EADDRINUSE then 'addressInUse'
+                     when Errno::ECONNREFUSED then 'connectionRefused'
+                     when Errno::ECONNRESET then 'connectionReset'
+                     when Errno::ENETUNREACH then 'networkUnreachable'
+                     when Errno::EHOSTUNREACH then 'hostUnreachable'
+                     when Errno::EPERM, Errno::EACCES then 'permissionDenied'
+                     when SystemCallError then 'other'
+                     end
+      # Retain the final counters even when failure occurs between periodic
+      # updates. Only fixed labels are emitted, never exception text or errno paths.
+      status if @ready
+      event('failureContext', 'operation' => @operation, 'systemError' => system_error)
+      event('failed', 'code' => code)
     end
 
     def flush_output
+      @operation = 'eventOutput'
       written = @output.write_nonblock(@out, exception: false)
       @out = @out.byteslice(written..-1) || ''.b if written.is_a?(Integer)
     end
 
     def accept_native
+      @operation = 'viewerAccept'
       result = @listener.accept_nonblock(exception: false)
       return if result == :wait_readable
       @client = own(result[0])
@@ -202,14 +230,18 @@ module ScreenSharingRelay
       @listener = nil
       @server = own(Socket.new(:INET, :STREAM, 0))
       [@client, @server].each { |s| s.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1) }
+      @operation = 'hostBind'
       @server.bind(Socket.sockaddr_in(0, @external))
+      @operation = 'hostConnect'
       @connecting = @server.connect_nonblock(Socket.sockaddr_in(@remote_port, @remote), exception: false) == :wait_writable
+      @remote_connected = !@connecting
       @connect_deadline = ScreenSharingRelay.now + 10
       @buffers = { @client => ''.b, @server => ''.b }
       @peers = { @client => @server, @server => @client }
     end
 
     def read_tcp(socket)
+      @operation = 'tcpRead'
       destination = @peers.fetch(socket)
       room = BUFFER_LIMIT - @buffers.fetch(destination).bytesize
       return if room <= 0
@@ -222,6 +254,7 @@ module ScreenSharingRelay
     end
 
     def write_tcp(socket)
+      @operation = 'tcpWrite'
       data = @buffers.fetch(socket)
       return if data.empty?
       count = socket.write_nonblock(data, exception: false)
@@ -233,6 +266,7 @@ module ScreenSharingRelay
     def forward_udp(socket)
       32.times do
         begin
+          @operation = 'udpReceive'
           packet = socket.recvmsg_nonblock(DATAGRAM_LIMIT, 0, 0, exception: false)
           break if packet == :wait_readable
           data, _sender, flags = packet
@@ -241,6 +275,7 @@ module ScreenSharingRelay
             next
           end
           target, direction = @udp_routes.fetch(socket)
+          @operation = 'udpSend'
           sent = target.sendmsg_nonblock(data, 0, nil, exception: false)
           if sent == data.bytesize
             if direction == :received
@@ -261,6 +296,7 @@ module ScreenSharingRelay
     end
 
     def tick
+      @operation = 'waiting'
       now = ScreenSharingRelay.now
       raise Failure.new('connectionTimedOut') if (@listener && now >= @accept_deadline) || (@connecting && now >= @connect_deadline)
       reads = [@input] + @udp_routes.keys
@@ -278,6 +314,7 @@ module ScreenSharingRelay
       if selected
         readable, writable = selected
         if readable.include?(@input)
+          @operation = 'parentInput'
           command = @input.read_nonblock(1, exception: false)
           if command.nil?
             @stopping = true
@@ -286,9 +323,11 @@ module ScreenSharingRelay
           raise Failure.new('incompatibleProtocol') unless command == :wait_readable
         end
         if @connecting && writable.include?(@server)
+          @operation = 'hostConnect'
           error = @server.getsockopt(Socket::SOL_SOCKET, Socket::SO_ERROR).int
-          raise Failure.new('connectFailed') unless error.zero?
+          raise SystemCallError.new('connect', error) unless error.zero?
           @connecting = false
+          @remote_connected = true
         end
         readable.each do |socket|
           next if socket == @input
@@ -307,6 +346,7 @@ module ScreenSharingRelay
       if @server && !@connecting
         @peers.each do |destination, source|
           if @eof[source] && @buffers[destination].empty? && !@write_closed[destination]
+            @operation = 'tcpShutdown'
             destination.shutdown(Socket::SHUT_WR)
             @write_closed[destination] = true
           end

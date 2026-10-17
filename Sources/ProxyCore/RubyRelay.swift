@@ -122,7 +122,7 @@ public struct RubyRelayRunner: Sendable {
         }
         var decoder = BackendLineDecoder(), inputOffset = 0
         var failure: BackendFailureCode?
-        var ready = false, outputEOF = false
+        var ready = false, outputEOF = false, stopped = false
         var frameWindow = ProcessInfo.processInfo.systemUptime, framesInWindow = 0
         let started = ProcessInfo.processInfo.systemUptime
         var stopAt: TimeInterval?, sentTERM = false, sentKILL = false
@@ -140,10 +140,13 @@ public struct RubyRelayRunner: Sendable {
                 case .ready:
                     guard !ready else { throw BackendProtocolError.invalidMessage }
                     ready = true
-                case .traffic, .media:
+                case .traffic, .media, .control:
                     guard ready else { throw BackendProtocolError.invalidMessage }
+                case .failureContext: break
                 case let .failed(code): failure = code
-                case .stopped: break
+                case .stopped:
+                    guard !stopped else { throw BackendProtocolError.invalidMessage }
+                    stopped = true
                 }
                 onEvent(event)
             }
@@ -156,7 +159,7 @@ public struct RubyRelayRunner: Sendable {
             if observation == -ECHILD { return .failed(.internalFailure) }
             if observation < 0 { failure = .internalFailure }
             if !ready && now - started > 8 && stopAt == nil { failure = .connectionTimedOut }
-            if cancellation.isCancelled || failure != nil {
+            if cancellation.isCancelled || failure != nil || stopped {
                 if stopAt == nil {
                     stopAt = now
                     if inputFD >= 0 { close(inputFD); inputFD = -1 }
@@ -212,7 +215,10 @@ public struct RubyRelayRunner: Sendable {
                 if reapError != 0 || signal != 0 { return .failed(.internalFailure) }
                 return .exited(exitCode)
             }
-            if outputEOF && stopAt == nil { failure = .incompatibleProtocol }
+            // stdout can close before waitid observes process exit. A terminal
+            // event already explains that EOF; retain its result and allow the
+            // same bounded exit grace used for cancellation.
+            if outputEOF && stopAt == nil && !stopped && failure == nil { failure = .incompatibleProtocol }
             var descriptor = pollfd(fd: outputEOF ? -1 : child.output_fd, events: Int16(POLLIN), revents: 0)
             _ = poll(&descriptor, 1, 40)
         }

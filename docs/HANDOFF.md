@@ -2,6 +2,29 @@
 
 ## Current resume point — 2026-10-18
 
+The first loopback live test also **failed**. Four schema-2 reports reached ready
+on 26.7.1 with zero UDP submissions. Two ended with `localAddressUnavailable`
+after 15–20 seconds and no reported TCP bytes; one was interrupted with zero
+traffic; one recorded 17 bytes toward native / 12 toward remote, a stop
+acknowledgement and `incompatibleProtocol`. The user confirms a login prompt
+appeared before failure. The reports cannot identify the failing socket call
+or prove an authentication rejection. Keep the uploaded archive private.
+
+A regression reproduces the supervisor misclassifying stdout EOF as incompatible
+when Ruby has emitted `stopped` but has not exited yet. The fix allows bounded
+exit grace and still rejects EOF without a terminal event. Schema-3 reports now
+include TCP acceptance/connection/read-EOF flags and fixed failure-operation and
+socket-error labels; Ruby emits final counters before failure. A changed route
+has a distinct code. This improves diagnosis; the two unavailable-address errors
+are not yet explained or fixed. Do not claim the transport works or infer a
+firewall/authentication cause. One new attempt with the schema-3 package is
+needed to localize the remaining failure.
+
+Current validation commands include the normal Swift suite/release build,
+`test-loopback-relay.py --native-helper .build/probe-native-udp`, the incoming
+and portable relay tests, and command smoke tests in both modes. Later paragraphs
+retain the history and superseded test counts.
+
 The incoming-only candidate has now **failed live on the previously working
 setup**. The user observed a gray startup screen followed by a generic broken
 stream error on repeated attempts. The submitted 26.7.1 report recorded 19,492

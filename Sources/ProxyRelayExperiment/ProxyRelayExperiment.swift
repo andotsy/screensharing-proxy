@@ -7,7 +7,7 @@ import Glibc
 #endif
 
 private struct ExperimentReport: Encodable {
-    let schemaVersion = 2
+    let schemaVersion = 3
     let experiment: String
     let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     let requestedDurationSeconds: Int
@@ -25,6 +25,12 @@ private struct ExperimentReport: Encodable {
     var forwardedToRemoteDatagrams: UInt64?
     var droppedDatagrams: UInt64 = 0
     var failure: BackendFailureCode?
+    var failureOperation: BackendOperation?
+    var failureSystemError: BackendSystemError?
+    var nativeTCPAccepted: Bool?
+    var remoteTCPConnected: Bool?
+    var nativeTCPReadClosed: Bool?
+    var remoteTCPReadClosed: Bool?
     let highPerformanceSession = "unverified"
     let counterScope: String
 
@@ -34,6 +40,8 @@ private struct ExperimentReport: Encodable {
             experiment = "loopback-ruby-tcp-udp"
             forwardedToNativeBytes = 0; forwardedToRemoteBytes = 0
             forwardedToNativeDatagrams = 0; forwardedToRemoteDatagrams = 0
+            nativeTCPAccepted = false; remoteTCPConnected = false
+            nativeTCPReadClosed = false; remoteTCPReadClosed = false
             counterScope = "Successful TCP/UDP socket submissions in each direction; datagram counts exclude TCP. Native authentication, decoding and input remain unverified."
         } else {
             experiment = "incoming-ruby-udp"
@@ -82,6 +90,11 @@ private final class Observation: @unchecked Sendable {
                 report.droppedDatagrams = dropped
             case .stopped: report.relayStopAcknowledged = true
             case let .failed(code): report.failure = code
+            case let .control(accepted, connected, nativeClosed, remoteClosed):
+                report.nativeTCPAccepted = accepted; report.remoteTCPConnected = connected
+                report.nativeTCPReadClosed = nativeClosed; report.remoteTCPReadClosed = remoteClosed
+            case let .failureContext(operation, systemError):
+                report.failureOperation = operation; report.failureSystemError = systemError
             }
         }
     }
@@ -195,7 +208,12 @@ struct ProxyRelayExperiment {
         } else {
             status("Report saved. Received \(report.receivedDatagrams ?? 0), locally submitted \(report.submittedDatagrams ?? 0), dropped \(report.droppedDatagrams) datagrams.\n")
         }
-        if let failure = report.failure { status("Relay failure: \(failure.rawValue).\n"); return 1 }
+        if let failure = report.failure {
+            status("Relay failure: \(failure.rawValue).\n")
+            if let operation = report.failureOperation { status("Failure stage: \(operation.rawValue).\n") }
+            if let systemError = report.failureSystemError { status("Socket error: \(systemError.rawValue).\n") }
+            return 1
+        }
         if case .exited(let code) = result, code != 0 { return 1 }
         if report.termination == "interrupted" { return 130 }
         return 0

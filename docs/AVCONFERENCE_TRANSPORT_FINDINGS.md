@@ -71,6 +71,11 @@ The new [loopback candidate](LOOPBACK_EXPERIMENT_GUIDE.md) removes the local
 source mismatch and forwards feedback through Ruby. Its native-helper fixture
 proves equal-port, peer-preserving delivery and feedback on this OS. These are
 socket-level results, not a passed native SRTP session or a confirmed fix.
+The first live loopback attempts subsequently failed after a login prompt, with
+no reported UDP traffic. The schema-2 failure codes did not locate two address
+errors. A clean-exit supervisor race is reproduced and fixed; schema-3 retains
+final counters and records TCP progress and the failure operation. These results
+do not confirm that source-address matching caused either candidate's failure.
 
 `VTPRecvProc` reads socket traffic and passes packets to
 `VTP_DemuxPacketsToVFDList`. The demultiplexer considers real descriptors,
@@ -97,9 +102,11 @@ under the restricted viewer's existing rules.
   helper at equal local/remote media ports on all three channels.
 - Two portable startup checks for the original relay pass. Seven tests needing
   distinct loopback addresses are explicitly skipped on macOS.
-- Eight loopback-relay tests pass, including bidirectional real-Ruby/native-helper
-  delivery on all three channels, TCP half-close, fresh restart and occupied owners.
-- 67 Swift tests in 12 suites and the release build pass with warnings as errors.
+- Eleven loopback-relay tests pass, including bidirectional real-Ruby/native-helper
+  delivery on all three channels, TCP half-close, fresh restart, occupied owners,
+  final counters and distinct bind/connect/route-change failure evidence.
+- 71 Swift tests in 12 suites and the release build pass with warnings as errors,
+  including the reproduced exit race and structured failure-context handling.
 - Four packaged-command smoke tests per mode cover INT/TERM/HUP cleanup,
   automatic timeout, exclusive report creation, occupied-port refusal, report
   privacy and port release. These fixtures use high ports and send no packets
