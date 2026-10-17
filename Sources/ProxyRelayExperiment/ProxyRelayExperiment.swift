@@ -7,22 +7,40 @@ import Glibc
 #endif
 
 private struct ExperimentReport: Encodable {
-    let schemaVersion = 1
-    let experiment = "incoming-ruby-udp"
+    let schemaVersion = 2
+    let experiment: String
     let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     let requestedDurationSeconds: Int
     var elapsedSeconds = 0.0
     var termination = "starting"
     var relayReady = false
     var relayStopAcknowledged = false
-    var receivedBytes: UInt64 = 0
-    var submittedBytes: UInt64 = 0
-    var receivedDatagrams: UInt64 = 0
-    var submittedDatagrams: UInt64 = 0
+    var receivedBytes: UInt64?
+    var submittedBytes: UInt64?
+    var receivedDatagrams: UInt64?
+    var submittedDatagrams: UInt64?
+    var forwardedToNativeBytes: UInt64?
+    var forwardedToRemoteBytes: UInt64?
+    var forwardedToNativeDatagrams: UInt64?
+    var forwardedToRemoteDatagrams: UInt64?
     var droppedDatagrams: UInt64 = 0
     var failure: BackendFailureCode?
     let highPerformanceSession = "unverified"
-    let counterScope = "Received by Ruby; submitted to the local UDP stack. Submission does not prove Apple received, authenticated or decoded media. Outbound native feedback is not counted."
+    let counterScope: String
+
+    init(duration: Int, mode: RubyRelayConfiguration.Mode) {
+        requestedDurationSeconds = duration
+        if mode == .loopback {
+            experiment = "loopback-ruby-tcp-udp"
+            forwardedToNativeBytes = 0; forwardedToRemoteBytes = 0
+            forwardedToNativeDatagrams = 0; forwardedToRemoteDatagrams = 0
+            counterScope = "Successful TCP/UDP socket submissions in each direction; datagram counts exclude TCP. Native authentication, decoding and input remain unverified."
+        } else {
+            experiment = "incoming-ruby-udp"
+            receivedBytes = 0; submittedBytes = 0; receivedDatagrams = 0; submittedDatagrams = 0
+            counterScope = "Received by Ruby; submitted to the local UDP stack. Submission does not prove Apple received, authenticated or decoded media. Outbound native feedback is not counted."
+        }
+    }
 }
 
 /// Synchronous callbacks arrive from the supervisor's worker. The lock protects
@@ -31,21 +49,36 @@ private final class Observation: @unchecked Sendable {
     private let lock = NSLock()
     private var report: ExperimentReport
     private var stopReason: String?
+    private let mode: RubyRelayConfiguration.Mode
+    private let listenerPort: UInt16
 
-    init(duration: Int) { report = .init(requestedDurationSeconds: duration) }
+    init(options: IncomingExperimentOptions) {
+        mode = options.mode; listenerPort = options.listenerPort
+        report = .init(duration: options.duration, mode: options.mode)
+    }
 
     func record(_ envelope: BackendEnvelope) {
         lock.withLock {
             switch envelope.event {
             case .ready:
                 report.relayReady = true
-                status("Relay ready. Connect Apple's Screen Sharing directly to the remote Mac in High Performance mode.\n")
+                if mode == .loopback {
+                    status("Relay ready. In Screen Sharing, connect to 127.0.0.1, TCP Port \(listenerPort), and select High Performance.\n")
+                } else {
+                    status("Relay ready. Connect Apple's Screen Sharing directly to the remote Mac in High Performance mode.\n")
+                }
             case let .traffic(received, sent):
-                report.receivedBytes = received
-                report.submittedBytes = sent
+                if mode == .loopback {
+                    report.forwardedToNativeBytes = received; report.forwardedToRemoteBytes = sent
+                } else {
+                    report.receivedBytes = received; report.submittedBytes = sent
+                }
             case let .media(received, sent, dropped):
-                report.receivedDatagrams = received
-                report.submittedDatagrams = sent
+                if mode == .loopback {
+                    report.forwardedToNativeDatagrams = received; report.forwardedToRemoteDatagrams = sent
+                } else {
+                    report.receivedDatagrams = received; report.submittedDatagrams = sent
+                }
                 report.droppedDatagrams = dropped
             case .stopped: report.relayStopAcknowledged = true
             case let .failed(code): report.failure = code
@@ -115,11 +148,14 @@ struct ProxyRelayExperiment {
         defer { try? output.close() }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try output.write(contentsOf: encoder.encode(ExperimentReport(requestedDurationSeconds: options.duration)))
+        try output.write(contentsOf: encoder.encode(ExperimentReport(duration: options.duration, mode: options.mode)))
 
-        status("Experimental incoming UDP relay. Disconnect any existing session before starting.\n")
+        status("Experimental \(options.mode.rawValue) relay. Disconnect any existing session before starting.\n")
+        if options.mode == .incoming {
+            status("This incoming-only candidate failed a previously working live setup; retained for research.\n")
+        }
         status("No working High Performance result is implied. Ctrl-C stops the relay and saves counters.\n")
-        let observation = Observation(duration: options.duration)
+        let observation = Observation(options: options)
         let started = ProcessInfo.processInfo.systemUptime
         // These dispositions affect this dedicated command only. Children get
         // normal signal handling from the shared process-spawn implementation.
@@ -154,7 +190,11 @@ struct ProxyRelayExperiment {
         try output.write(contentsOf: data)
         try output.truncate(atOffset: UInt64(data.count))
         try output.synchronize()
-        status("Report saved. Received \(report.receivedDatagrams), locally submitted \(report.submittedDatagrams), dropped \(report.droppedDatagrams) datagrams.\n")
+        if options.mode == .loopback {
+            status("Report saved. Forwarded \(report.forwardedToNativeDatagrams ?? 0) datagrams to native, \(report.forwardedToRemoteDatagrams ?? 0) to remote; dropped \(report.droppedDatagrams).\n")
+        } else {
+            status("Report saved. Received \(report.receivedDatagrams ?? 0), locally submitted \(report.submittedDatagrams ?? 0), dropped \(report.droppedDatagrams) datagrams.\n")
+        }
         if let failure = report.failure { status("Relay failure: \(failure.rawValue).\n"); return 1 }
         if case .exited(let code) = result, code != 0 { return 1 }
         if report.termination == "interrupted" { return 130 }
@@ -163,22 +203,28 @@ struct ProxyRelayExperiment {
     #endif
 
     private static let usage = """
+    screensharing-proxy-experiment loopback --remote IPv4 --output NEW.json [options]
     screensharing-proxy-experiment incoming --remote IPv4 --output NEW.json [options]
 
-    Separate, unproven incoming-UDP experiment using /usr/bin/ruby.
-    Disconnect any existing Screen Sharing session first. Wait for 'Relay ready',
-    then connect Apple's client directly to the remote Mac in High Performance mode.
-    TCP and native outbound feedback remain direct. No interface, route, firewall
-    or service configuration is changed. Existing UDP owners cause startup failure.
+    Separate, unproven experiments using /usr/bin/ruby. Disconnect existing
+    Screen Sharing sessions first and wait for 'Relay ready'. In loopback mode,
+    connect Apple's client to 127.0.0.1 with TCP Port 15900 (or --listen-port),
+    and select High Performance. TCP and both UDP directions go through Ruby.
+    Incoming mode keeps TCP and outbound feedback direct; that candidate failed
+    a working live setup and is retained for research. No interface, route,
+    firewall or service configuration is changed. Existing owners cause failure.
 
       --remote IPv4       Numeric IPv4 address of the remote Mac (required).
       --output PATH       New owner-only JSON report (required; never overwritten).
       --media-base PORT   Existing UDP base on the Macs, 1024...65533 (default 5900).
       --duration SECONDS  Stop after 10...1200 seconds (default 600).
+      --listen-port PORT  Loopback mode's local TCP port (default 15900).
+      --remote-control-port PORT  Loopback mode's remote TCP port (default 5900).
 
     Ctrl-C, termination or the duration limit stops and reaps the owned Ruby child.
     Reports contain aggregate counters and OS version, without endpoints, payloads
     or credentials. Local submission does not prove delivery, decoding or feedback.
+    Loopback mode ends when TCP closes; start it again before each reconnect.
     Record video, audio, keyboard/mouse control and reconnect results separately.
     This command is not a working-proxy release and does not enable the app's tabs.
 

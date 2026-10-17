@@ -2,6 +2,46 @@
 
 ## Current resume point — 2026-10-18
 
+The incoming-only candidate has now **failed live on the previously working
+setup**. The user observed a gray startup screen followed by a generic broken
+stream error on repeated attempts. The submitted 26.7.1 report recorded 19,492
+received datagrams / 22,254,056 bytes and 19,484 local submissions / 22,250,684
+bytes over 52.06 seconds, eight reported drops, and clean user interruption.
+Host-side logs from the matching minute repeatedly reported an RTCP timeout
+with no previous receive timestamp. This is transport incompatibility on the
+working pair; it does not test the affected 27.0.1 viewer's firewall. Keep the
+submitted JSON and local log material outside the repository.
+
+The next candidate is `loopback-relay.rb`: TCP on 127.0.0.1:15900, external
+fixed-peer UDP, connected loopback feedback receivers, and separate injectors
+from 127.0.0.1 at the media port to the existing routed local IP at that port.
+Apple's later wildcard bind/duplicate connect returns an unconnected descriptor.
+Unlike the incoming-only approach, incoming media presents the same peer address
+and port as the TCP target, and both UDP directions go through Ruby. Eight native
+relay tests pass, including the actual Apple helper through the real Ruby child
+on all three channels, bidirectional datagram boundaries, TCP, refusal of active
+owners, cleanup and fresh restart. TCP SO_REUSEADDR permits restarting after the
+previous owned connection's TIME_WAIT; no SO_REUSEPORT is used for TCP.
+
+Use `screensharing-proxy-experiment loopback --remote HOST_IP --output NEW.json`
+or build `bash Packaging/build-relay-experiment.sh loopback`. The controlling
+Mac connects to **127.0.0.1, TCP Port 15900, High Performance** after Relay ready;
+start a fresh experiment for every attempt. See `LOOPBACK_EXPERIMENT_GUIDE.md`.
+The command's schema-2 report distinguishes datagrams forwarded to native and
+to remote. No full session has passed on this candidate, and localhost High
+Performance negotiation remains a gate. The app stays diagnostic-only. Do not
+ask the user to retry the failed incoming-only package unchanged.
+
+Source-check follow-up finds the receive call chain down to
+`VCSDInfoIsSrcDstInfoMatchedWithIP`. The inspected result marks connection health;
+it has not been proven to discard the media. Do not claim a confirmed source
+rejection diagnosis. Read `AVCONFERENCE_TRANSPORT_FINDINGS.md` for scope.
+
+Current local validation is 67 Swift tests, release builds, eight loopback Ruby
+tests, six incoming Ruby tests and four command smoke tests per mode. The following
+paragraphs describe the earlier incoming implementation and remain historical
+where they recommend that failed candidate or report older counts.
+
 Development now runs natively on the user's Apple silicon Mac, in the local
 `screensharing-proxy` checkout for this chat. Use its installed Xcode Swift 6.3
 and `/usr/bin/ruby` 2.6.10. The former `/workspace` Linux toolchain paths below

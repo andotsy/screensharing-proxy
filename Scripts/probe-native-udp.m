@@ -14,12 +14,13 @@
 #include <unistd.h>
 
 @interface SSPFixtureRemoteAddress : NSObject
+@property(nonatomic, copy) NSString *address;
 - (BOOL)isIPv6;
 - (NSString *)ip;
 @end
 @implementation SSPFixtureRemoteAddress
 - (BOOL)isIPv6 { return NO; }
-- (NSString *)ip { return @"192.0.2.1"; }
+- (NSString *)ip { return self.address ?: @"192.0.2.1"; }
 @end
 
 @interface SSPFixtureMediaConfig : NSObject
@@ -41,13 +42,16 @@ int main(int argc, const char *argv[]) {
         NSMutableDictionary *result = [@{@"scope": @"native UDP helper; no session"} mutableCopy];
         int route = -1, relay = -1, native = -1, injector = -1;
         int reservedPort = 0;
-        if (argc != 1) {
-            if (argc != 3 || strcmp(argv[1], "--reserved-port") != 0) return 2;
+        BOOL loopbackPeer = argc == 2 && strcmp(argv[1], "--loopback-peer") == 0;
+        BOOL relayRoundtrip = argc == 3 && strcmp(argv[1], "--loopback-roundtrip-port") == 0;
+        if (argc != 1 && !loopbackPeer) {
+            if (argc != 3 || (!relayRoundtrip && strcmp(argv[1], "--reserved-port") != 0)) return 2;
             char *end = NULL;
             long value = strtol(argv[2], &end, 10);
             if (!end || *end || value < 1024 || value > 65535) return 2;
             reservedPort = (int)value;
         }
+        loopbackPeer = loopbackPeer || relayRoundtrip;
         void *framework = NULL;
         @try {
             framework = dlopen("/System/Library/PrivateFrameworks/ScreenSharing.framework/Versions/A/ScreenSharing", RTLD_LAZY | RTLD_LOCAL);
@@ -59,7 +63,8 @@ int main(int argc, const char *argv[]) {
             }
 
             // UDP connect performs route/source selection without sending a
-            // datagram. Never send any bytes through route or relay below.
+            // datagram. Never send to that documentation peer. The loopback
+            // mode exchanges synthetic local packets with its feedback socket.
             struct sockaddr_in peer = {.sin_len = sizeof(peer), .sin_family = AF_INET, .sin_port = htons(9)};
             inet_pton(AF_INET, "192.0.2.1", &peer.sin_addr);
             route = socket(AF_INET, SOCK_DGRAM, 0);
@@ -75,21 +80,28 @@ int main(int argc, const char *argv[]) {
                 // The test driver already started the real Ruby child. Use its
                 // reserved tuple without taking another socket at that port.
                 local.sin_port = htons((uint16_t)reservedPort);
+                peer.sin_port = local.sin_port;
+                if (loopbackPeer) peer.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             } else {
             relay = socket(AF_INET, SOCK_DGRAM, 0);
             requireCall(relay, @"relay.socket");
             int enabled = 1;
             requireCall(setsockopt(relay, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled)), @"relay.reuseaddr");
             requireCall(setsockopt(relay, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled)), @"relay.reuseport");
-            requireCall(bind(relay, (struct sockaddr *)&local, sizeof(local)), @"relay.bind");
+            struct sockaddr_in relayAddress = local;
+            if (loopbackPeer) relayAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            requireCall(bind(relay, (struct sockaddr *)&relayAddress, sizeof(relayAddress)), @"relay.bind");
             length = sizeof(local);
-            requireCall(getsockname(relay, (struct sockaddr *)&local, &length), @"relay.getsockname");
+            requireCall(getsockname(relay, (struct sockaddr *)&relayAddress, &length), @"relay.getsockname");
+            local.sin_port = relayAddress.sin_port;
+            if (loopbackPeer) peer.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             peer.sin_port = local.sin_port;
             requireCall(connect(relay, (struct sockaddr *)&peer, sizeof(peer)), @"relay.connect");
             }
 
             SSPFixtureMediaConfig *config = [SSPFixtureMediaConfig new];
             config.remoteAddress = [SSPFixtureRemoteAddress new];
+            if (loopbackPeer) config.remoteAddress.address = @"127.0.0.1";
             typedef int (*CreateSocket)(id, SEL, id, uint16_t);
             CreateSocket createSocket = (CreateSocket)method_getImplementation(method);
             native = createSocket(cls, selector, config, ntohs(local.sin_port));
@@ -105,10 +117,28 @@ int main(int argc, const char *argv[]) {
             result[@"nativeWildcard"] = @(observed.sin_addr.s_addr == INADDR_ANY);
             result[@"nativeMediaPortMatches"] = @(observed.sin_port == local.sin_port);
 
+            if (relayRoundtrip) {
+                puts("ready"); fflush(stdout);
+                struct pollfd descriptor = {native, POLLIN, 0};
+                requireCall(poll(&descriptor, 1, 2000), @"roundtrip.poll");
+                uint8_t packet[64];
+                length = sizeof(observed);
+                ssize_t count = recvfrom(native, packet, sizeof(packet), MSG_DONTWAIT, (struct sockaddr *)&observed, &length);
+                requireCall((int)count, @"roundtrip.receive");
+                BOOL matched = count == 32 && observed.sin_addr.s_addr == peer.sin_addr.s_addr && observed.sin_port == peer.sin_port;
+                result[@"injectionMatchesConfiguredPeer"] = @(matched);
+                if (matched) requireCall((int)sendto(native, packet, (size_t)count, 0, (struct sockaddr *)&peer, sizeof(peer)), @"roundtrip.feedback");
+            } else {
             injector = socket(AF_INET, SOCK_DGRAM, 0);
             requireCall(injector, @"injector.socket");
             struct sockaddr_in loopback = {.sin_len = sizeof(loopback), .sin_family = AF_INET};
             loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            if (loopbackPeer) {
+                int enabled = 1;
+                requireCall(setsockopt(injector, SOL_SOCKET, SO_REUSEADDR, &enabled, sizeof(enabled)), @"injector.reuseaddr");
+                requireCall(setsockopt(injector, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled)), @"injector.reuseport");
+                loopback.sin_port = local.sin_port;
+            }
             requireCall(bind(injector, (struct sockaddr *)&loopback, sizeof(loopback)), @"injector.bind");
             length = sizeof(loopback);
             requireCall(getsockname(injector, (struct sockaddr *)&loopback, &length), @"injector.getsockname");
@@ -126,6 +156,24 @@ int main(int argc, const char *argv[]) {
                     && observed.sin_addr.s_addr == loopback.sin_addr.s_addr && observed.sin_port == loopback.sin_port);
             } else {
                 result[@"localInjectionToNative"] = @NO;
+            }
+            if (loopbackPeer) {
+                result[@"injectionMatchesConfiguredPeer"] = @(observed.sin_addr.s_addr == peer.sin_addr.s_addr
+                    && observed.sin_port == peer.sin_port && [result[@"localInjectionToNative"] boolValue]);
+                arc4random_buf(payload, sizeof(payload));
+                requireCall((int)sendto(native, payload, sizeof(payload), 0, (struct sockaddr *)&peer, sizeof(peer)), @"native.sendFeedback");
+                struct pollfd feedback[] = {{relay, POLLIN, 0}, {injector, POLLIN, 0}, {native, POLLIN, 0}};
+                requireCall(poll(feedback, 3, 500), @"feedback.poll");
+                BOOL delivered = NO;
+                if (feedback[0].revents & POLLIN) {
+                    length = sizeof(observed);
+                    ssize_t count = recvfrom(relay, received, sizeof(received), MSG_DONTWAIT, (struct sockaddr *)&observed, &length);
+                    delivered = count == (ssize_t)sizeof(payload) && memcmp(received, payload, sizeof(payload)) == 0
+                        && observed.sin_addr.s_addr == peer.sin_addr.s_addr && observed.sin_port == peer.sin_port;
+                }
+                result[@"nativeFeedbackToRelay"] = @(delivered);
+                result[@"feedbackReachedWrongSocket"] = @((feedback[1].revents & POLLIN) || (feedback[2].revents & POLLIN));
+            }
             }
         } @catch (NSException *exception) {
             result[@"errorType"] = exception.name;

@@ -24,6 +24,8 @@ jobs:
           "$RUNNER_TEMP/probe-native-udp"
       - name: Test the real Ruby incoming relay and Apple socket coexistence
         run: python3 Scripts/test-incoming-relay.py --native-helper "$RUNNER_TEMP/probe-native-udp" -v
+      - name: Test peer-preserving loopback media and native feedback through Ruby
+        run: python3 Scripts/test-loopback-relay.py --native-helper "$RUNNER_TEMP/probe-native-udp" -v
       - name: Inspect native media binding and port selection evidence
         run: |
           python3 Scripts/inspect-native-transport.py
@@ -49,7 +51,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           resources = Path('.build/native-bundle/ScreenSharingProxy.app/Contents/Resources')
-          for name in ['relay.rb', 'incoming-relay.rb']:
+          for name in ['relay.rb', 'incoming-relay.rb', 'loopback-relay.rb']:
               scripts = list(resources.rglob(name))
               assert len(scripts) == 1
               assert scripts[0].read_bytes() == Path('Sources/ProxyCore/Resources', name).read_bytes()
@@ -58,9 +60,11 @@ jobs:
         run: |
           bash Packaging/build-relay-experiment.sh
           python3 Scripts/test-incoming-experiment.py dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64/screensharing-proxy-experiment -v
+          bash Packaging/build-relay-experiment.sh loopback
+          python3 Scripts/test-incoming-experiment.py dist/ScreenSharingProxy-LoopbackExperiment-macOS-arm64/screensharing-proxy-experiment --mode loopback -v
       - name: Save the experimental command for controlled native testing
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: incoming-relay-experiment-macOS-arm64
-          path: dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64.zip
+          name: relay-experiments-macOS-arm64
+          path: dist/ScreenSharingProxy-*Experiment-macOS-arm64.zip
           retention-days: 7

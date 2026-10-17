@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Native command smoke checks using owned high ports and no remote packets."""
+import argparse
 import errno
 import json
 import os
@@ -15,7 +16,11 @@ import tempfile
 import time
 import unittest
 
-EXECUTABLE = Path(sys.argv.pop(1)).resolve()
+PARSER = argparse.ArgumentParser()
+PARSER.add_argument('executable', type=Path)
+PARSER.add_argument('--mode', choices=['incoming', 'loopback'], default='incoming')
+OPTIONS, REST = PARSER.parse_known_args()
+EXECUTABLE = OPTIONS.executable.resolve()
 REMOTE = '192.0.2.1'  # UDP connect chooses a route; the fixture sends no packets.
 
 
@@ -28,6 +33,9 @@ class ExperimentTests(unittest.TestCase):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
             route.connect((REMOTE, 9))
             self.address = route.getsockname()[0]
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            self.listener_port = reservation.getsockname()[1]
         for _ in range(50):
             self.base = random.randrange(20000, 50000)
             try:
@@ -54,19 +62,29 @@ class ExperimentTests(unittest.TestCase):
     def assert_ports_available(self):
         sockets = []
         try:
-            for offset in range(3):
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            addresses = [self.address, '127.0.0.1'] if OPTIONS.mode == 'loopback' else [self.address]
+            for address in addresses:
+                for offset in range(3):
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sockets.append(sock)
+                    sock.bind((address, self.base + offset))
+            if OPTIONS.mode == 'loopback':
+                sock = socket.socket()
                 sockets.append(sock)
-                sock.bind((self.address, self.base + offset))
+                sock.bind(('127.0.0.1', self.listener_port))
+                sock.listen(1)
         finally:
             for sock in sockets:
                 sock.close()
 
     def start(self):
-        process = subprocess.Popen([
-            str(EXECUTABLE), 'incoming', '--remote', REMOTE,
+        arguments = [
+            str(EXECUTABLE), OPTIONS.mode, '--remote', REMOTE,
             '--media-base', str(self.base), '--duration', '10', '--output', str(self.output),
-        ], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ]
+        if OPTIONS.mode == 'loopback':
+            arguments += ['--listen-port', str(self.listener_port)]
+        process = subprocess.Popen(arguments, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.children.append(process)
         return process
 
@@ -92,7 +110,14 @@ class ExperimentTests(unittest.TestCase):
         self.assertNotIn(self.directory.name, data)
         report = json.loads(data)
         self.assertEqual(report['highPerformanceSession'], 'unverified')
-        self.assertEqual(report['receivedDatagrams'], 0)
+        if OPTIONS.mode == 'loopback':
+            self.assertEqual(report['experiment'], 'loopback-ruby-tcp-udp')
+            self.assertEqual(report['forwardedToNativeDatagrams'], 0)
+            self.assertEqual(report['forwardedToRemoteDatagrams'], 0)
+            self.assertNotIn('submittedDatagrams', report)
+        else:
+            self.assertEqual(report['experiment'], 'incoming-ruby-udp')
+            self.assertEqual(report['receivedDatagrams'], 0)
         return report
 
     def test_signals_stop_reap_and_save_private_report(self):
@@ -144,4 +169,4 @@ class ExperimentTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(argv=['test-incoming-experiment.py'] + REST)

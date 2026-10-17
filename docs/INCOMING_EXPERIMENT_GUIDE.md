@@ -1,5 +1,12 @@
 # Incoming UDP experiment
 
+**Failed live candidate:** the user tested this on a previously working macOS
+26.7.1 setup and repeatedly saw a gray screen followed by a generic stream error.
+Ruby received media, but the host logged missing RTCP feedback. Do not repeat this
+unchanged test as the next step. See [the loopback experiment](LOOPBACK_EXPERIMENT_GUIDE.md)
+for the new, still unproven candidate; the instructions below preserve the earlier
+experiment for research.
+
 This is a separate development experiment for Apple silicon Macs. It uses
 Apple's `/usr/bin/ruby` and requires no Python installation. It has not yet
 demonstrated a full High Performance session. The released app remains

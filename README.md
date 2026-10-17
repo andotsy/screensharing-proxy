@@ -14,7 +14,10 @@ and opens a Save dialog for a redacted ZIP. Collection includes exact `proxyd`
 discovery and separate Python/Ruby firewall candidates.
 **Traffic forwarding remains experimental.** System Ruby is the selected
 candidate; full native High Performance media and control remain unproven.
-The separate [incoming experiment](docs/INCOMING_EXPERIMENT_GUIDE.md) runs on
+The incoming-only experiment failed on a previously working setup: gray video
+and stream disconnection despite received traffic, with host RTCP timeouts.
+The new [loopback experiment](docs/LOOPBACK_EXPERIMENT_GUIDE.md) forwards TCP and
+both UDP directions while preserving the viewer's expected local peer. It runs on
 the **controlling Mac**, not the Mac whose screen is shared. It does not enable
 the diagnostic app's disabled features.
 
@@ -77,10 +80,10 @@ In the original Linux cloud workspace use `bash Scripts/swift-cloud.sh test -j 4
 Swift 6.2 Linux toolchain and writable caches. There are no external package
 dependencies.
 
-Build a separate, ad-hoc-signed incoming-relay test ZIP on Apple silicon macOS:
+Build a separate, ad-hoc-signed loopback-relay test ZIP on Apple silicon macOS:
 
 ```sh
-bash Packaging/build-relay-experiment.sh
+bash Packaging/build-relay-experiment.sh loopback
 ```
 
 This is a development artifact for controlled testing, not a published working

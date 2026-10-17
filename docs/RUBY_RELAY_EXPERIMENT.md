@@ -1,12 +1,27 @@
 # Ruby relay experiment
 
-Current status (2026-10-18): `Resources/incoming-relay.rb` implements the
+Current status (2026-10-18): the incoming-only candidate **failed live on the
+previously working pair**. The user observed gray video and a generic stream
+error on repeated attempts; host logs reported missing RTCP feedback. The cause
+is not established by relay counters. Read the [native follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md).
+
+The new `Resources/loopback-relay.rb` forwards TCP and both UDP directions using
+only the existing loopback and routed local IPs. Apple's TCP target is now
+127.0.0.1:15900; a connected loopback receiver captures native feedback while a
+separate loopback sender injects media toward the native wildcard socket at the
+existing LAN IP. This preserves the local peer address and media port expected
+by Apple. Eight native tests cover real Ruby forwarding, actual Apple helper
+sockets on all three channels, exact peer tuples, TCP, cleanup and restart.
+See the [loopback guide](LOOPBACK_EXPERIMENT_GUIDE.md). Full native negotiation,
+video and control remain unproven; the app remains diagnostic-only.
+
+Earlier implementation: `Resources/incoming-relay.rb` implements the
 incoming-only candidate, with exclusive startup, bounded buffers, fixed peers,
 local submission counters, route checks and owned-process cleanup. Six native
 tests pass on the local macOS 26.7.1 Mac, including the actual Apple socket
 helper. A separate [bounded experiment command](INCOMING_EXPERIMENT_GUIDE.md)
-is available for live testing. Full High Performance video, input and feedback
-remain unproven, and the app remains diagnostic-only. Read the
+is retained for research, not another unchanged live retry. Full High Performance
+video, input and feedback did not pass. Read the
 [native AVConference follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md).
 
 The original address-separated transport implementation passes local tests, but its proposed native
@@ -16,7 +31,7 @@ not enabled in the application and is not a functioning High Performance proxy.
 A different incoming-only candidate now passes macOS UDP delivery probes,
 including the actual native socket-creation helper. That candidate is described
 below; it is implemented separately from `Resources/relay.rb`, and AVConference/live
-High Performance behavior remains untested.
+High Performance behavior subsequently failed as described above.
 
 The user selected system Ruby after the restricted Mac listed /usr/bin/ruby as
 allowed and the Python runtime as blocked. This is an experimental data path;

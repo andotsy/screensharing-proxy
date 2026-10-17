@@ -4,7 +4,17 @@ cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
 test "$(uname -m)" = arm64
 swift build -c release --product screensharing-proxy-experiment -Xswiftc -warnings-as-errors
-destination=dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64
+case "${1:-incoming}" in
+  incoming)
+    destination=dist/ScreenSharingProxy-IncomingExperiment-macOS-arm64
+    launcher=Packaging/RunIncomingExperiment.command
+    guide=docs/INCOMING_EXPERIMENT_GUIDE.md ;;
+  loopback)
+    destination=dist/ScreenSharingProxy-LoopbackExperiment-macOS-arm64
+    launcher=Packaging/RunLoopbackExperiment.command
+    guide=docs/LOOPBACK_EXPERIMENT_GUIDE.md ;;
+  *) printf 'Choose incoming or loopback.\n' >&2; exit 2 ;;
+esac
 # The development archive is not a published release asset. Refuse replacement
 # so previously collected reports beside an extracted command are never removed.
 test ! -e "$destination"
@@ -12,8 +22,8 @@ test ! -e "$destination.zip"
 mkdir -p "$destination"
 cp .build/release/screensharing-proxy-experiment "$destination/"
 cp -R .build/release/ScreenSharingProxy_ProxyCore.bundle "$destination/"
-cp Packaging/RunIncomingExperiment.command "$destination/Run.command"
-cp docs/INCOMING_EXPERIMENT_GUIDE.md "$destination/README.md"
+cp "$launcher" "$destination/Run.command"
+cp "$guide" "$destination/README.md"
 git rev-parse HEAD > "$destination/SOURCE_COMMIT.txt"
 if test -n "$(git status --porcelain)"; then
     printf 'Includes uncommitted working-tree changes.\n' >> "$destination/SOURCE_COMMIT.txt"

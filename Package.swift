@@ -8,7 +8,7 @@ var products: [Product] = [
 ]
 var targets: [Target] = [
     .target(name: "CProcessSupport", publicHeadersPath: "include"),
-    .target(name: "ProxyCore", dependencies: ["CProcessSupport"], resources: [.copy("Resources/relay.rb"), .copy("Resources/incoming-relay.rb")]),
+    .target(name: "ProxyCore", dependencies: ["CProcessSupport"], resources: [.copy("Resources/relay.rb"), .copy("Resources/incoming-relay.rb"), .copy("Resources/loopback-relay.rb")]),
     .target(name: "ProxyAppSupport", dependencies: ["ProxyCore"]),
     .executableTarget(name: "ProxyDiagnostics", dependencies: ["ProxyCore"]),
     .executableTarget(name: "ProxyRelayExperiment", dependencies: ["ProxyCore"]),

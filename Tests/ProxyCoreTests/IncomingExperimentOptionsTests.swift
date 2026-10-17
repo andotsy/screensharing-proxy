@@ -3,6 +3,30 @@ import Testing
 @testable import ProxyCore
 
 @Suite struct IncomingExperimentOptionsTests {
+    @Test func loopbackUsesOnlyTheExistingLocalAddressAndExplicitTCPPorts() throws {
+        let options = try IncomingExperimentOptions(arguments: [
+            "loopback", "--remote", "192.0.2.1", "--output", "result.json",
+            "--listen-port", "15901", "--remote-control-port", "5901",
+        ])
+        let config = options.configuration()
+        #expect(config.mode == .loopback)
+        #expect(config.listenerAddress == "127.0.0.1")
+        #expect(config.nativeAddress == "127.0.0.1")
+        #expect(config.listenerPort == 15901)
+        #expect(config.remoteControlPort == 5901)
+        #expect(config.mediaBase == 5900)
+        for verb in ["loopback", "incoming"] {
+            for port in ["0", "1023", "65536", "5900;id"] {
+                #expect(throws: IncomingExperimentOptions.InvalidInvocation.self) {
+                    try IncomingExperimentOptions(arguments: [verb, "--remote", "192.0.2.1", "--output", "result.json", "--listen-port", port])
+                }
+            }
+        }
+        #expect(throws: IncomingExperimentOptions.InvalidInvocation.self) {
+            try IncomingExperimentOptions(arguments: ["incoming", "--remote", "192.0.2.1", "--output", "result.json", "--listen-port", "15900"])
+        }
+    }
+
     @Test func explicitInvocationSelectsOnlyTheIncomingResource() throws {
         let options = try IncomingExperimentOptions(arguments: [
             "incoming", "--remote", "192.0.2.1", "--output", "result.json",

@@ -1,26 +1,35 @@
 # Transport findings
 
-Status on 2026-10-18: **incoming Ruby relay and native socket delivery tested
-locally; complete High Performance session remains unproven**. Development now
-runs on the user's native macOS 26.7.1 Mac. See the
-[AVConference follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md) for the new static
-feedback-path evidence and remaining source-acceptance limit.
+Status on 2026-10-18: **incoming-only live test failed; a peer-preserving loopback
+candidate passes bidirectional native-socket tests but remains unproven live**.
+The previously working 26.7.1 pair produced gray video and a generic stream error
+on repeated incoming-only attempts. Ruby received/submitted media, while host
+logs in the matching minute reported missing RTCP feedback. This is not evidence
+about the restricted Mac's filter. See the [AVConference follow-up](AVCONFERENCE_TRANSPORT_FINDINGS.md).
+
+`loopback-relay.rb` now forwards TCP and both UDP directions. A connected loopback
+feedback receiver and a distinct local injector preserve the peer address/port
+Apple expects when connecting to 127.0.0.1:15900. Actual Apple-created sockets
+exchange packets through the real Ruby child on all three channels. This requires
+no aliases or configuration changes; localhost High Performance negotiation and
+complete live media/input remain gates. See [test instructions](LOOPBACK_EXPERIMENT_GUIDE.md).
 
 The user selected system Ruby and declined interface configuration changes.
-The new [Ruby relay experiment](RUBY_RELAY_EXPERIMENT.md) forwards TCP and all
+The original [Ruby relay experiment](RUBY_RELAY_EXPERIMENT.md) forwards TCP and all
 three UDP ports in local tests, but macOS CI rejects the separate loopback
 addresses with EADDRNOTAVAIL. Its available loopback targets select the same
 source/destination address. The proposed native path therefore requires a new
 demonstrated binding mechanism under the user's constraint. It is not enabled
 in the app, and no working High Performance relay is claimed.
 
-A subsequent UDP reuse experiment now demonstrates a candidate incoming path
+A subsequent UDP reuse experiment demonstrated a candidate incoming path
 without aliases: reserve the network tuple first, let the native helper return
 an unconnected socket after its tolerated duplicate-connect error, and forward
 incoming bytes locally to that socket. The actual native helper accepts the
 local test packet on macOS 26.6.2 CI. AVConference source validation, outbound
-feedback and the restricted Mac's filter remain untested. This candidate is
-implemented in incoming-relay.rb, separately from the address-separated relay; see the
+feedback were then unresolved; the later live attempt failed as recorded above.
+The restricted Mac's filter remains untested. This candidate is retained in
+incoming-relay.rb, separately from the address-separated relay; see the
 [probe results and acceptance gates](RUBY_RELAY_EXPERIMENT.md#socket-reuse-and-a-different-incoming-path).
 
 See [the service and transport research](HIGH_PERFORMANCE_RESEARCH.md) for pinned
