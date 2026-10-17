@@ -4,7 +4,7 @@ import ProxyCore
 import SwiftUI
 
 private enum AppPane: String, CaseIterable {
-    case proxy = "Proxy", diagnostics = "Diagnostics", settings = "Settings"
+    case proxy = "Proxy", settings = "Settings", diagnostics = "Diagnostics"
     var symbol: String {
         switch self {
         case .proxy: "network"

@@ -145,3 +145,7 @@ NSSavePanel.ok calls on macOS 10.15+, so the test does not claim to simulate a
 user's Save click. Portable tests cover save outcomes, retry/cancellation, ZIP
 compatibility and atomic file writing. A manual user Save click remains an
 installed-app acceptance check.
+
+Alpha 5 orders the tabs Proxy, Settings, Diagnostics. Diagnostics is still the
+selected, enabled tab. Keep the user's updated Icon Composer document as the
+app icon source for future releases; do not restore the earlier generated PNG.

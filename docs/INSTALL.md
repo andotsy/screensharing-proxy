@@ -1,7 +1,7 @@
 # Install Screen Sharing Proxy
 
-Download `ScreenSharingProxy-v0.1.0-alpha.4-macOS-arm64.dmg` from the
-[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.4).
+Download `ScreenSharingProxy-v0.1.0-alpha.5-macOS-arm64.dmg` from the
+[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.5).
 Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 
 1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.

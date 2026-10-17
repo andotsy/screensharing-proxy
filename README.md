@@ -3,10 +3,10 @@
 A native macOS project investigating a viewer-side relay for Apple's High
 Performance Screen Sharing.
 
-**Native app prerelease: `v0.1.0-alpha.4`.** Its macOS arm64 DMG contains
+**Native app prerelease: `v0.1.0-alpha.5`.** Its macOS arm64 DMG contains
 `ScreenSharingProxy.app`, a proxy icon, an Applications shortcut and an
 offline installation guide. See [installation](docs/INSTALL.md) and
-[release notes](docs/releases/0.1.0-alpha.4.md).
+[release notes](docs/releases/0.1.0-alpha.5.md).
 
 The app opens on its **Diagnostics** tab. **Proxy** and **Settings** are visible
 but grayed out until those features are available. One button collects diagnostics
