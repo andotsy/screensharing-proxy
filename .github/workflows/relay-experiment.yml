@@ -16,6 +16,8 @@ jobs:
           persist-credentials: false
       - name: Test existing loopback addresses without changing configuration
         run: /usr/bin/ruby --disable-gems Scripts/probe-loopback.rb
+      - name: Measure native-pattern UDP reuse with synthetic loopback packets
+        run: /usr/bin/ruby --disable-gems Scripts/probe-udp-reuse.rb
       - name: Inspect native media binding and port selection evidence
         run: |
           python3 Scripts/inspect-native-transport.py
