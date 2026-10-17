@@ -12,6 +12,30 @@ func describeSymbol(_ address: UInt) -> String {
     return String(cString: name)
 }
 
+// Resolve the arm64e authenticated import stub seen in this framework. Read a
+// single pointer through Mach so an unavailable cache slot fails safely. Never
+// call the imported function or interpret an arbitrary address as an object.
+func describeImport(_ pointer: UnsafeRawPointer, address: UInt, count: Int) -> String? {
+    guard count >= 16 else { return nil }
+    let pageInstruction = pointer.load(as: UInt32.self)
+    let addInstruction = pointer.load(fromByteOffset: 4, as: UInt32.self)
+    guard pageInstruction & 0x9f00_001f == 0x9000_0011, // adrp x17
+          addInstruction & 0xffc0_03ff == 0x9100_0231, // add x17, x17, #imm12
+          pointer.load(fromByteOffset: 8, as: UInt32.self) == 0xf940_0230 else { return nil } // ldr x16, [x17]
+    let immediate = ((pageInstruction >> 5) & 0x7ffff) << 2 | ((pageInstruction >> 29) & 3)
+    let pages = Int64(Int32(bitPattern: immediate << 11) >> 11)
+    let slot = (Int64(address) & ~0xfff) + (pages << 12) + Int64((addInstruction >> 10) & 0xfff)
+    guard slot > 0 else { return nil }
+    var value: UInt64 = 0
+    var copied: mach_vm_size_t = 0
+    let result = withUnsafeMutablePointer(to: &value) { output in
+        mach_vm_read_overwrite(mach_task_self_, mach_vm_address_t(slot), 8,
+                               mach_vm_address_t(UInt(bitPattern: output)), &copied)
+    }
+    guard result == KERN_SUCCESS, copied == 8 else { return nil }
+    return describeSymbol(UInt(value) & 0x0000_ffff_ffff_ffff)
+}
+
 let path = "/System/Library/PrivateFrameworks/ScreenSharing.framework/Versions/A/ScreenSharing"
 guard let handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL) else {
     print("ScreenSharing framework unavailable")
@@ -62,10 +86,13 @@ if let cls = NSClassFromString("SSSession"),
                   let range = executableRanges.first(where: { $0.contains(target) }),
                   let pointer = UnsafeRawPointer(bitPattern: target) else { continue }
             let prefix = min(32, Int(range.upperBound - target))
-            let call: [String: Any] = [
+            var call: [String: Any] = [
                 "address": String(target, radix: 16), "symbol": describeSymbol(target),
                 "code": Data(bytes: pointer, count: prefix).base64EncodedString()
             ]
+            if let imported = describeImport(pointer, address: target, count: prefix) {
+                call["import"] = imported
+            }
             print("CALLEE " + String(data: try JSONSerialization.data(withJSONObject: call, options: [.sortedKeys]), encoding: .utf8)!)
         }
         for symbol in ["socket", "bind", "connect", "setsockopt", "getsockname", "getpeername", "close"] {
