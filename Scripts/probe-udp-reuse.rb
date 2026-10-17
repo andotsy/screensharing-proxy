@@ -104,6 +104,66 @@ ensure
   owned.each(&:close)
 end
 
+def receive_fixture(socket, expected, source_port)
+  raise 'fixture receive timeout' unless IO.select([socket], nil, nil, 0.5)
+  payload, source = socket.recvfrom_nonblock(256)
+  raise 'fixture payload mismatch' unless payload == expected
+  raise 'fixture source mismatch' unless source[3] == LOOPBACK && source[1] == source_port
+end
+
+# Model distinct network peers using two ephemeral ports on the existing
+# loopback address. This isolates UDP demultiplexing; it does not reproduce
+# Apple's equal media ports on two separate Macs or invoke AVConference.
+def probe_prebound_peer
+  owned = []
+  result = {}
+  remote = make_socket(false, owned)
+  remote.bind(LOOPBACK, 0)
+  remote_port = remote.local_address.ip_port
+  relay = make_socket(true, owned)
+  relay.bind(LOOPBACK, 0)
+  local_port = relay.local_address.ip_port
+  relay.connect(LOOPBACK, remote_port)
+  remote.connect(LOOPBACK, local_port)
+
+  native = make_socket(true, owned)
+  native.bind('0.0.0.0', local_port)
+  begin
+    native.connect(LOOPBACK, remote_port)
+    return { 'candidateAvailable' => false, 'reason' => 'duplicateConnectSucceeded' }
+  rescue Errno::EADDRINUSE => error
+    result['nativeConnectError'] = error.class.name
+  end
+  result['nativeRemainsWildcard'] = native.local_address.ip_address == '0.0.0.0'
+  injector = make_socket(false, owned)
+  injector.bind(LOOPBACK, 0)
+  injector_port = injector.local_address.ip_port
+  incoming = Random.new.bytes(32)
+  feedback = Random.new.bytes(32)
+
+  remote.send(incoming, 0)
+  receive_fixture(relay, incoming, remote_port)
+  result['remoteToRelay'] = true
+  injector.send(incoming, 0, LOOPBACK, local_port)
+  receive_fixture(native, incoming, injector_port)
+  result['localInjectionToNative'] = true
+  native.send(feedback, 0, LOOPBACK, remote_port)
+  receive_fixture(remote, feedback, local_port)
+  result['nativeFeedbackWithDestination'] = true
+  begin
+    native.send(feedback, 0)
+    result['nativeSendWithoutDestination'] = 'accepted'
+  rescue SystemCallError => error
+    result['nativeSendWithoutDestination'] = error.class.name
+  end
+  result['candidateAvailable'] = true
+  result
+rescue StandardError => error
+  result.merge('candidateAvailable' => false, 'errorType' => error.class.name)
+ensure
+  owned.each(&:close)
+end
+
 # A two-port control verifies that the fixture can observe both directions.
 owned = []
 begin
@@ -128,4 +188,5 @@ results = %w[relay native_model].product([false, true], [false, true], [false, t
   probe(first: first, relay_reuse: reuse, relay_connected: connected, relay_wildcard: wildcard)
 end
 puts JSON.pretty_generate('ruby' => RUBY_VERSION, 'platform' => RUBY_PLATFORM,
-                          'twoPortControl' => control, 'samePortCases' => results)
+                          'twoPortControl' => control, 'samePortCases' => results,
+                          'preboundPeerModel' => probe_prebound_peer)
