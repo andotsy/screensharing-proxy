@@ -3,16 +3,20 @@
 A native macOS project investigating a viewer-side relay for Apple's High
 Performance Screen Sharing.
 
-**First prerelease: `v0.1.0-alpha.1` (diagnostic alpha).** Its macOS arm64 DMG
-contains a compiled diagnostic CLI, an offline guide and a Terminal shortcut.
-See [installation](docs/INSTALL.md) and [release notes](docs/releases/0.1.0-alpha.1.md).
+**Native app prerelease: `v0.1.0-alpha.2`.** Its macOS arm64 DMG contains
+`ScreenSharingProxy.app`, an original relay icon, an Applications shortcut and an
+offline installation guide. See [installation](docs/INSTALL.md) and
+[release notes](docs/releases/0.1.0-alpha.2.md).
 
-The first implementation supplies the difficult process-control and evidence
-collection foundations. **There is no functioning Screen Sharing relay or GUI
-yet.** The reportedly permitted `proxyd` executable and its forwarding interface
-must be identified on the viewer Mac before a backend is chosen.
+The app opens a native window and automatically discovers an explicitly allowed
+`proxyd`. It can collect, copy and save redacted diagnostics without Terminal.
+**Traffic forwarding remains unfinished.** The permitted service's forwarding
+interface must be identified on the viewer Mac before a backend is chosen.
 
 Implemented:
+
+- Native Connection, General and Diagnostics panes, a menu bar menu, Dock visibility
+  and optional launch at login. Collection supports cancellation and private export.
 
 - A read-only macOS diagnostic CLI: firewall entries, executable identities,
   launchd manifest candidates, and correlated TCP/UDP socket snapshots.
@@ -25,7 +29,7 @@ Implemented:
 - Tests for failures, races, parsing and default report redaction.
 
 GitHub Actions runs the macOS build/tests on pushes to `main`. Version tags run
-the diagnostic DMG workflow, verify the mounted contents and offline commands,
+the native app DMG workflow, verify the mounted app, launch it, exercise discovery/export and offline commands,
 and publish a prerelease only after the uploaded checksums pass. Published assets
 are never replaced under an existing version.
 

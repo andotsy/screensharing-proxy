@@ -64,11 +64,11 @@ Next work, in order:
    candidate). Complete the two-Mac transport experiment in the plan.
 2. Build the proven adapter/data path and its realistic local TCP/UDP tests.
    Do not fill the missing mechanism with a guessed TCP-only implementation.
-3. Wire the native app to the real adapter supervisor and the tested lifecycle.
-   Native pane layout, menu, settings, icon and diagnostics presentation may be
-   developed independently while waiting for Mac evidence, using inert fixtures.
-4. Adapt the reference's packaging/CI/DMG pipeline into this repo, then perform
-   macOS builds and installed-app/live acceptance tests.
+3. Wire the native app to the proven adapter supervisor and tested lifecycle.
+   The native diagnostic UI, menu, optional login setting and icon are implemented;
+   do not present the diagnostic-only state as a working relay.
+4. Complete installed-app and live transport acceptance on the user's Macs.
+   Native app and DMG assembly use `Packaging/build-app.sh` and `build-app-dmg.sh`.
 
 Commands in the current cloud workspace:
 
@@ -86,18 +86,17 @@ The toolchain lives outside the checkout in `/workspace/.toolchains/`; caches
 are under `/workspace/.cache/`. `HOME` is unchanged. No external Swift dependencies
 are declared. macOS builds use the local Xcode toolchain directly.
 
-Validation recorded for this implementation: 41 Swift Testing tests in five
-suites passed; debug and release builds passed with warnings as errors. Release
-CLI smoke checks passed for help, unsupported-platform behavior, invalid input,
-0600 report creation, refusal to overwrite and refusal to follow output symlinks.
-The verified cloud installation script was executed for a fresh extraction and
-then rerun to check repeatability. Native macOS compilation, actual firewall
-output, process ownership on the viewer and High Performance forwarding remain
-unvalidated. Synthetic macOS-shaped fixtures are explicitly not live evidence.
+Portable validation: 47 Swift Testing tests in seven suites pass with warnings
+as errors, covering the core and the app's serial collection/cancellation state
+and private atomic report writer. The app target is macOS-only; its real window,
+automatic discovery and report export are exercised by `Scripts/smoke-app.py` in
+macOS CI. Live viewer firewall output and High Performance forwarding still need
+testing on the user's Macs. Synthetic fixtures and CI hosts do not establish
+that transport works.
 
-The user subsequently authorized the initial commit and first release. The first
-version is `v0.1.0-alpha.1`, explicitly a diagnostic alpha containing the compiled
-CLI in a macOS arm64 DMG. See `.github/workflows/release.yml` and the release notes.
-Publication depends on the macOS workflow passing; do not infer publication from
-a local tag. Other workspace repositories remain read-only. No firewall/display
-changes or running network relay have been made by this implementation.
+`v0.1.0-alpha.1` is the published standalone CLI diagnostic alpha.
+`v0.1.0-alpha.2` adds a native diagnostic `.app` and new DMG; confirm publication in
+GitHub Releases rather than inferring it from a tag. Published assets are never
+replaced under the same version. The user authorized commits and releases.
+Other workspace repositories remain read-only. No firewall/display changes or
+running network relay have been made by this implementation.

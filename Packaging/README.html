@@ -2,61 +2,56 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Screen Sharing Proxy — diagnostic alpha</title>
+<title>Screen Sharing Proxy — installation</title>
 <style>
 :root{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.55}
 body{max-width:780px;margin:48px auto;padding:0 24px}h1{line-height:1.15}
 .notice{padding:16px 20px;border:1px solid #728b9e;border-radius:14px}
 pre{overflow:auto;padding:16px;border:1px solid #728b9e;border-radius:12px;font-size:13px}
-button{font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer}
-small{opacity:.8}a{color:inherit}
+button{font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer}a{color:inherit}
 </style>
 <h1>Screen Sharing Proxy</h1>
-<p>Diagnostic alpha · Apple silicon · macOS 14+</p>
-<p class="notice">This first release automatically discovers a <code>proxyd</code>
-executable with a listed incoming-connection allowance and collects network
-diagnostics. The Screen Sharing relay and native GUI are still being developed.
-This version does not forward traffic or change the firewall.</p>
-<h2>Run automatic discovery</h2>
-<p>Open the included Terminal shortcut. Copy and paste the command below while
-this disk image is mounted. It creates a new folder in Downloads, copies the
-diagnostic tool, verifies its signature, removes quarantine from that copy if
-present, and writes a redacted report beside it. No Xcode or Python is needed to
-run the compiled tool.</p>
+<p>Native diagnostic alpha · Apple silicon · macOS 14+</p>
+<p class="notice">This app automatically finds an allowed <code>proxyd</code>
+service and collects diagnostics. Traffic forwarding remains under development.
+This alpha does not relay Screen Sharing or change the firewall.</p>
+<h2>Install and open</h2>
+<ol><li>Drag <strong>ScreenSharingProxy.app</strong> onto <strong>Applications</strong>.</li>
+<li>Open <strong>Screen Sharing Proxy</strong> in Applications. The window opens
+and discovers the service automatically. Use its menu bar icon to reopen it.</li>
+<li>Start the failing Screen Sharing session. Optionally enter the remote Mac's
+numeric IP, then click <strong>Collect Diagnostics</strong>. Copy or save the
+report in the Diagnostics pane.</li></ol>
+<p>No Xcode or Python installation is needed. Launch at login is optional in General.</p>
+<h2>If macOS blocks the app</h2>
+<p>This alpha is ad hoc signed and not notarized. After installing it in
+Applications, open the included Terminal shortcut and paste the command below.
+It verifies the app identity and signature, removes quarantine only from that
+app, and opens it. Use it only for a download you trust.</p>
 <button id="copy" type="button">Copy command</button>
 <span id="copy-status" role="status"></span>
-<pre><code id="discovery-command">(
+<pre><code id="launch-command">(
 set -eu
-tool_dir=$(mktemp -d "$HOME/Downloads/ScreenSharingProxy-Diagnostics.XXXXXX")
-tool="$tool_dir/screensharing-proxy-diagnose"
-cp '/Volumes/Screen Sharing Proxy Diagnostics/screensharing-proxy-diagnose' "$tool"
-/usr/bin/codesign --verify --strict "$tool"
-/usr/bin/codesign --display --verbose=2 "$tool" 2&gt;&amp;1 | /usr/bin/grep -Fx 'Identifier=com.andotsy.screensharing-proxy.diagnose' &gt;/dev/null
-if /usr/bin/xattr -p com.apple.quarantine "$tool" &gt;/dev/null 2&gt;&amp;1; then
-    /usr/bin/xattr -d com.apple.quarantine "$tool"
-fi
-printf 'Tool and report folder: %s\n' "$tool_dir"
-"$tool" discover --output "$tool_dir/proxyd-report.json"
+app=&#x27;/Applications/ScreenSharingProxy.app&#x27;
+test &quot;$(/usr/libexec/PlistBuddy -c &#x27;Print :CFBundleIdentifier&#x27; &quot;$app/Contents/Info.plist&quot;)&quot; = com.andotsy.screensharing-proxy
+/usr/bin/codesign --verify --deep --strict &quot;$app&quot;
+/usr/bin/codesign --display --verbose=2 &quot;$app&quot; 2&gt;&amp;1 | /usr/bin/grep -Fx &#x27;Identifier=com.andotsy.screensharing-proxy&#x27; &gt;/dev/null
+/usr/bin/xattr -dr com.apple.quarantine &quot;$app&quot;
+/usr/bin/open &quot;$app&quot;
 )</code></pre>
-<p>An unresolved discovery exits with code 3 and still writes a report. It may
-mean no matching executable, an inaccessible or blocked candidate, an ambiguous
-match, or unknown firewall settings. An allow entry does not prove that the
-service supports forwarding or that every network filter permits it.</p>
-<h2>Collect session sockets</h2>
-<p>Start the failing High Performance Screen Sharing session, then run the copied
-tool with <code>collect --remote REMOTE_IP --output viewer-report.json</code>.
-Replace <code>REMOTE_IP</code> with the remote Mac’s numeric IPv4 or IPv6 address.
-Use <code>--help</code> for all options. The tool refuses to overwrite reports.</p>
-<h2>Report privacy and signing</h2>
-<p>Private addresses and non-system paths are replaced by tokens by default.
-Reports retain system executable paths, ports, process IDs and service/signing
-identifiers. They contain no packet payloads or process environments. Files are
-created with owner-only permissions. Review a report before sharing it.</p>
-<p>This alpha is ad hoc signed and is not notarized. Release assets include
-<code>SHA256SUMS</code> for download integrity checks.</p>
+<h2>Privacy and integrity</h2>
+<p>Private addresses and non-system paths are redacted by default. Reports retain
+system executable paths, ports, process IDs and service/signing identifiers.
+No packet contents, passwords or process environments are collected. Saved files
+have owner-only permissions. Review a report before sharing it.</p>
+<p>An unknown, blocked or ambiguous discovery is reported as such. An allow entry
+does not establish a forwarding API or permission from other network filters.</p>
+<p>Release assets include <code>SHA256SUMS</code> for download integrity checks.
+The CLI is included inside the app at
+<code>Contents/MacOS/screensharing-proxy-diagnose</code>.</p>
 <script>
 document.getElementById('copy').addEventListener('click',async()=>{
- const code=document.getElementById('discovery-command');
+ const code=document.getElementById('launch-command');
  const status=document.getElementById('copy-status');
  try{await navigator.clipboard.writeText(code.textContent);status.textContent='Copied';}
  catch{const selection=window.getSelection();const range=document.createRange();

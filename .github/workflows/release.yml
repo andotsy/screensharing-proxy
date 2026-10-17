@@ -1,4 +1,4 @@
-name: Release diagnostic alpha
+name: Release native app alpha
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing diagnostic alpha tag (for example v0.1.0-alpha.1)'
+        description: 'Existing app alpha tag (for example v0.1.0-alpha.2)'
         required: true
         type: string
 
@@ -44,13 +44,13 @@ jobs:
           xcodebuild -version
           swift --version
           echo "SSP_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "DMG_NAME=ScreenSharingProxy-Diagnostics-$RELEASE_TAG-macOS-arm64.dmg" >> "$GITHUB_ENV"
+          echo "DMG_NAME=ScreenSharingProxy-$RELEASE_TAG-macOS-arm64.dmg" >> "$GITHUB_ENV"
 
-      - name: Test and build the diagnostic DMG
+      - name: Test and build the app DMG
         run: |
           swift build -Xswiftc -warnings-as-errors
           swift test -Xswiftc -warnings-as-errors
-          bash Packaging/build-diagnostics-dmg.sh
+          bash Packaging/build-app-dmg.sh
           python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
 
       - name: Verify mounted contents and offline guide
@@ -59,10 +59,13 @@ jobs:
           mount_path=$(mktemp -d "$RUNNER_TEMP/ssp-mount.XXXXXX")
           hdiutil attach "dist/$DMG_NAME" -readonly -nobrowse -mountpoint "$mount_path"
           trap 'hdiutil detach "$mount_path"' EXIT
-          test -f "$mount_path/screensharing-proxy-diagnose"
-          test "$("$mount_path/screensharing-proxy-diagnose" --version)" = "screensharing-proxy-diagnose $SSP_VERSION"
-          codesign --verify --strict "$mount_path/screensharing-proxy-diagnose"
-          test "$(lipo -archs "$mount_path/screensharing-proxy-diagnose")" = arm64
+          app="$mount_path/ScreenSharingProxy.app"
+          python3 Scripts/smoke-app.py "$app"
+          test "$("$app/Contents/MacOS/screensharing-proxy-diagnose" --version)" = "screensharing-proxy-diagnose $SSP_VERSION"
+          codesign --verify --strict "$app/Contents/MacOS/screensharing-proxy-diagnose"
+          test "$(lipo -archs "$app/Contents/MacOS/ScreenSharingProxy")" = arm64
+          test -L "$mount_path/Applications"
+          test "$(readlink "$mount_path/Applications")" = /Applications
           test -L "$mount_path/Terminal"
           test "$(readlink "$mount_path/Terminal")" = /System/Applications/Utilities/Terminal.app
           cmp Packaging/README.html "$mount_path/README.html"
@@ -84,7 +87,7 @@ jobs:
             fi
           else
             gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --latest=false \
-              --title "Screen Sharing Proxy $RELEASE_TAG — diagnostic alpha" --notes-file "$notes"
+              --title "Screen Sharing Proxy $RELEASE_TAG — native diagnostic alpha" --notes-file "$notes"
           fi
           gh release upload "$RELEASE_TAG" "dist/$DMG_NAME" dist/SHA256SUMS --clobber
           download_dir=$(mktemp -d "$RUNNER_TEMP/ssp-download.XXXXXX")

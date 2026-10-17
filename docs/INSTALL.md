@@ -1,33 +1,43 @@
-# Diagnostic alpha installation
+# Install Screen Sharing Proxy
 
-Download the macOS arm64 DMG from the GitHub prerelease. This alpha contains the
-compiled diagnostic CLI and an offline guide; the relay and native GUI are still
-pending. Requires Apple silicon and macOS 14+. Xcode/Python are not needed to run
-the binary. The release is ad hoc signed and not notarized.
+Download `ScreenSharingProxy-v0.1.0-alpha.2-macOS-arm64.dmg` from the
+[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.2).
+Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 
-Open README.html inside the mounted image and its Terminal shortcut. The guide
-copies the tool to a fresh Downloads folder, verifies its signature and identity,
-removes quarantine only from that copy, and collects a redacted report:
+1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.
+2. Open **Screen Sharing Proxy** from Applications. Its window opens and searches
+   automatically for an explicitly allowed `proxyd`. The menu bar icon reopens
+   the window after you close it.
+3. Start the failing Screen Sharing session, optionally enter the remote Mac's
+   numeric IP, then choose **Collect Diagnostics**. The Diagnostics pane lets you
+   copy or save the report. Private addresses and paths are redacted by default.
+
+**This is a diagnostic alpha. It does not forward Screen Sharing traffic yet.**
+The app leaves firewall and display settings unchanged. Launch at login is off
+unless you enable it in General.
+
+The app is ad hoc signed and not notarized. If macOS blocks opening the downloaded
+app, open the included Terminal shortcut and run this command after installing
+it in Applications. It checks the app identity and signature, removes quarantine
+only from that app, then opens it:
 
 ```sh
 (
 set -eu
-tool_dir=$(mktemp -d "$HOME/Downloads/ScreenSharingProxy-Diagnostics.XXXXXX")
-tool="$tool_dir/screensharing-proxy-diagnose"
-cp '/Volumes/Screen Sharing Proxy Diagnostics/screensharing-proxy-diagnose' "$tool"
-/usr/bin/codesign --verify --strict "$tool"
-/usr/bin/codesign --display --verbose=2 "$tool" 2>&1 | /usr/bin/grep -Fx 'Identifier=com.andotsy.screensharing-proxy.diagnose' >/dev/null
-if /usr/bin/xattr -p com.apple.quarantine "$tool" >/dev/null 2>&1; then
-    /usr/bin/xattr -d com.apple.quarantine "$tool"
-fi
-printf 'Tool and report folder: %s\n' "$tool_dir"
-"$tool" discover --output "$tool_dir/proxyd-report.json"
+app='/Applications/ScreenSharingProxy.app'
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.andotsy.screensharing-proxy
+/usr/bin/codesign --verify --deep --strict "$app"
+/usr/bin/codesign --display --verbose=2 "$app" 2>&1 | /usr/bin/grep -Fx 'Identifier=com.andotsy.screensharing-proxy' >/dev/null
+/usr/bin/xattr -dr com.apple.quarantine "$app"
+/usr/bin/open "$app"
 )
 ```
 
-Exit 3 means discovery remained unresolved; a report is still written. The
-report folder is printed in Terminal. See DIAGNOSTICS.md for data visibility,
-privacy, and optional session collection. No firewall or display setting changes.
+Do not run the command on an untrusted download. `SHA256SUMS` is published beside
+the DMG; run `shasum -a 256 -c SHA256SUMS` with both files in one directory to check
+the download before mounting it.
 
-For download integrity, place the DMG and SHA256SUMS in one directory and run
-`shasum -a 256 -c SHA256SUMS` there before mounting the image.
+The CLI is also included at
+`/Applications/ScreenSharingProxy.app/Contents/MacOS/screensharing-proxy-diagnose`.
+See [diagnostics](DIAGNOSTICS.md) for its options and report visibility limits.
+The older `v0.1.0-alpha.1` release contains only the standalone diagnostic CLI.

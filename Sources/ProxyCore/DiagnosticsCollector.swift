@@ -22,7 +22,11 @@ public struct DiagnosticOptions: Sendable {
     }
 }
 
-public struct DiagnosticsCollector: Sendable {
+public protocol DiagnosticCollecting: Sendable {
+    func inspect(_ options: DiagnosticOptions) async -> DiagnosticCollection
+}
+
+public struct DiagnosticsCollector: DiagnosticCollecting {
     private let runner: any CommandRunning
     private let platform: String
     private let scanManifests: Bool

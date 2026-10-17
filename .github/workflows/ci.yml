@@ -31,5 +31,6 @@ jobs:
         run: |
           swift build -Xswiftc -warnings-as-errors
           swift test -Xswiftc -warnings-as-errors
-          swift build -c release -Xswiftc -warnings-as-errors
+          bash Packaging/build-app.sh
           python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
+          python3 Scripts/smoke-app.py .build/native-bundle/ScreenSharingProxy.app

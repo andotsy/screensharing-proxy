@@ -1,8 +1,9 @@
 """Run the exact offline guide command on a disposable macOS copy."""
 from html.parser import HTMLParser
 from pathlib import Path
+import json
+import plistlib
 import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,7 +18,7 @@ class CommandBlock(HTMLParser):
         self.parts = []
 
     def handle_starttag(self, tag, attrs):
-        if tag == "code" and dict(attrs).get("id") == "discovery-command":
+        if tag == "code" and dict(attrs).get("id") == "launch-command":
             self.inside = True
             self.blocks += 1
 
@@ -37,40 +38,41 @@ def main():
     assert parser.blocks == 1
     snippet = "".join(parser.parts).strip()
     assert snippet in Path("docs/INSTALL.md").read_text()
-    volume_literal = "'/Volumes/Screen Sharing Proxy Diagnostics/screensharing-proxy-diagnose'"
-    download_literal = '"$HOME/Downloads/ScreenSharingProxy-Diagnostics.XXXXXX"'
-    assert snippet.count(volume_literal) == 1
-    assert snippet.count(download_literal) == 1
+    app_literal = "'/Applications/ScreenSharingProxy.app'"
+    assert snippet.count(app_literal) == 1
     with tempfile.TemporaryDirectory(prefix="ssp-guide-") as temporary:
         root = Path(temporary)
-        fixture = root / "Volume with spaces"
-        fixture.mkdir()
-        tool = fixture / "screensharing-proxy-diagnose"
-        shutil.copy2(volume / tool.name, tool)
-        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(tool)], check=True)
-        command = snippet.replace(volume_literal, shlex.quote(str(tool)))
-        command = command.replace(download_literal, shlex.quote(str(root / "ScreenSharingProxy-Diagnostics.XXXXXX")))
+        app = root / "Applications with spaces/ScreenSharingProxy.app"
+        app.parent.mkdir()
+        subprocess.run(["/usr/bin/ditto", str(volume / app.name), str(app)], check=True)
+        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
+        report = root / "native-report.json"
+        command = snippet.replace(app_literal, shlex.quote(str(app)))
+        # Keep the guide's launch command, with a test-only argument so the
+        # launched native app exports evidence and quits after discovery.
+        command = command.replace('/usr/bin/open "$app"',
+            '/usr/bin/open -W "$app" --args --smoke-test ' + shlex.quote(str(report)))
         script = root / "guide.zsh"
         script.write_text(command + "\n")
         subprocess.run(["/bin/zsh", "-n", str(script)], check=True)
         result = subprocess.run(["/bin/zsh", str(script)], capture_output=True, text=True, timeout=90)
-        assert result.returncode in (0, 3), result.stderr
-        installed = list(root.glob("ScreenSharingProxy-Diagnostics.*"))
-        assert len(installed) == 1
-        copied = installed[0] / tool.name
-        assert (installed[0] / "proxyd-report.json").is_file()
-        subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(copied)], check=True)
-        quarantine = subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(copied)], capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(report.read_text())["platform"] == "macOS"
+        subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
+        quarantine = subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(app)], capture_output=True)
         assert quarantine.returncode != 0
-        # The guide must reject a validly signed, unrelated executable.
-        # Apple system executables carry protected file flags. Copy only their
-        # signed contents; reproducing those flags requires privileges and is
-        # irrelevant to this identity-rejection test.
-        shutil.copyfile("/bin/echo", tool)
-        tool.chmod(0o755)
+        # A signed app with another identity must be rejected before removing
+        # its quarantine marker or attempting to launch it.
+        plist = app / "Contents/Info.plist"
+        info = plistlib.loads(plist.read_bytes())
+        info["CFBundleIdentifier"] = "com.andotsy.packaging.unrelated"
+        plist.write_bytes(plistlib.dumps(info))
+        subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--identifier", info["CFBundleIdentifier"], str(app)], check=True)
+        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
         unrelated = subprocess.run(["/bin/zsh", str(script)], capture_output=True, timeout=30)
-        assert unrelated.returncode not in (0, 3)
-    print("Offline guide command and unrelated-executable rejection passed.")
+        assert unrelated.returncode != 0
+        subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(app)], check=True, capture_output=True)
+    print("Offline app launch command and unrelated-app rejection passed.")
 
 
 if __name__ == "__main__":
