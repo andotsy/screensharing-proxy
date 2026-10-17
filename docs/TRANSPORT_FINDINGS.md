@@ -34,6 +34,25 @@ The server's endpoint derivation makes a viewer-only, address-separated local
 relay worth testing. Native-viewer binding behavior, source-tuple acceptance,
 port conflicts and actual filtering still determine whether it works.
 
+The user explicitly permits a companion on the remote Mac if necessary;
+installation on the controlling Mac alone is a preference. The goal includes
+full keyboard/mouse control in both cases. A paired relay can choose its outer
+transport ports and control both local connections, but still has to demonstrate
+compatible native socket bindings and accepted source tuples at both ends.
+
+The alpha-5 capture from an unrestricted macOS 26.7.1 (25G241) viewer is a
+user-confirmed working High Performance session. All ten complete snapshots show
+the Screen Sharing client connected to peer TCP 5900, avconferenced UDP 5900 to
+the same peer, and avconferenced wildcard UDP 5901. This gives a working-session
+reference and exposes a potential relay bind conflict. It does not establish
+effective socket delegation or a successful proxied path.
+
+That capture also identifies five accessible, signature-verified Python/Ruby
+firewall targets listed as allowed. /usr/bin/python3 has the signing identifier
+com.apple.dt.xcode_select.tool-shim-public; its actual launched executable and
+receiving-socket identity still need testing. No runtime was executed by the
+collector, and no exact proxyd was found. Keep the source ZIP outside the repo.
+
 | Question | Current answer |
 | --- | --- |
 | Uploaded binary origin | Separate unblocked Mac; user reports 26.7.1 (25G241); metadata says SDK/minimum 26.7 |
@@ -42,20 +61,21 @@ port conflicts and actual filtering still determine whether it works.
 | Actual filter and effective rule | User-reported restriction; not reproduced |
 | Receiving socket owner(s) | Not collected on the affected viewer |
 | Server media address derivation | TCP local/peer IPs with configured UDP base, confirmed in supplied daemon |
-| Viewer binding / source validation | Not established; native client not supplied |
+| Viewer binding / source validation | Direct working session: specific-address UDP 5900 and wildcard UDP 5901; bindings and peer acceptance through a relay remain untested |
 | Loopback delivery and socket coexistence | Not tested |
 | Complete High Performance session via relay | Not tested |
 
-The user prefers viewer-only installation and recalls `proxyd`, rather than
-Python, as the allowed executable. Python cannot acquire another process's
-allowance by being launched by it. Identify the permitted socket owner and its
-supported interface before selecting the backend.
+The user initially recalled proxyd as the permitted executable. The unrestricted
+capture supplies Python/Ruby candidates, but the restricted Mac's identity and
+effective permission still need measurement. Python cannot acquire another
+process's allowance by being launched by it.
 
-Next: obtain the viewer report when available, resolve native-client bindings
-and the permitted process, then run the address-separated relay experiment in
-the research note. No daemon execution, firewall changes or live forwarding
-were performed during this research. Create `docs/adr/0001-transport.md` only
-after a complete data path is demonstrated.
+Next: use the unrestricted pair to test native bindings and source acceptance
+through the address-separated relay, including a remote companion when needed.
+Obtain the restricted viewer report when available and repeat the proven path
+under its existing firewall rules. No daemon execution, firewall changes or live
+forwarding were performed during this research. Create `docs/adr/0001-transport.md`
+only after a complete data path is demonstrated.
 
 The existing protocol/lifecycle code controls a future app-owned adapter. It is
 not a protocol for Apple's daemon and grants no ability to reconfigure it.

@@ -74,9 +74,9 @@ socket attribution. No user payloads or uploaded binaries are in the repository.
 
 Next work, in order:
 
-1. Run `screensharing-proxy-diagnose` on the viewer Mac and inspect the identified
-   `proxyd` interface (`discover` automatically selects an explicitly allowed
-   candidate). Complete the two-Mac transport experiment in the plan.
+1. Collect the restricted viewer's report and identify its permitted receiving
+   executable. Use the working unrestricted capture as a reference. Complete
+   the transport experiment, with a remote companion if needed, as now authorized.
 2. Build the proven adapter/data path and its realistic local TCP/UDP tests.
    Do not fill the missing mechanism with a guessed TCP-only implementation.
 3. Wire the native app to the proven adapter supervisor and tested lifecycle.
@@ -151,3 +151,17 @@ selected, enabled tab. Keep the user's updated Icon Composer document as the
 app icon source for future releases; do not restore the earlier generated PNG.
 The content header (icon, app name and ALPHA badge) is removed; tabs sit directly
 below the native window title.
+
+Deployment clarification: installation on the controlling Mac alone is preferred,
+but the user explicitly authorizes a remote companion if necessary. Both options
+must preserve full interactive Screen Sharing, including keyboard/mouse control.
+Do not ask again whether installation on both Macs is acceptable. This does not
+settle the separate technical questions around bindings, local delivery and
+effective firewall identity, or authorize unrelated privileged network changes.
+
+The user confirmed that the alpha-5 ZIP was captured during working High
+Performance sharing on the unrestricted Mac. Ten complete snapshots show the
+same TCP/UDP pattern as the earlier capture. Five Python/Ruby firewall entries
+are allowed, accessible and signature-verified; /usr/bin/python3 identifies as
+an Xcode tool shim. Preserve this as the working reference, without committing
+the uploaded ZIP or its private metadata. See TRANSPORT_FINDINGS.md.

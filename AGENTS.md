@@ -7,7 +7,10 @@ commit identifiers or documentation copied from private reference projects.
 
 Read `docs/IMPLEMENTATION_PLAN.md` and `docs/TRANSPORT_FINDINGS.md`. The viewer's
 allowed executable is recalled as `proxyd`; its identity and forwarding API are
-unverified. Prefer viewer-only installation. Do not implement a guessed service
+unverified on the restricted Mac. Prefer installation on the controlling Mac
+alone, but the user explicitly permits a companion on the remote Mac if needed.
+The goal includes full keyboard/mouse control, not read-only viewing.
+Do not implement a guessed service
 interface, change firewall rules, or describe TCP forwarding as a High Performance
 Screen Sharing solution. Keep unknown evidence distinct from a passing check.
 

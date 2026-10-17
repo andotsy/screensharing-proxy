@@ -16,11 +16,13 @@ Build a native macOS utility that makes Apple's **High Performance Screen
 Sharing** usable when incoming traffic for its receiving process is blocked on
 the **viewer Mac**, while a suitable relay process is permitted. The remote Mac
 already accepts the required traffic.
+The goal is fully interactive sharing, including keyboard and mouse control.
 
 Use these terms consistently:
 
-- **Viewer:** the Mac the user operates, running Apple's Screen Sharing client
-  and the proposed proxy app. This is the Mac with the firewall restriction.
+- **Viewer:** the controlling Mac, running Apple's Screen Sharing client and
+  the proposed proxy app. This is the Mac with the firewall restriction;
+  the term describes its role, not read-only access.
 - **Remote:** the Mac whose desktop is displayed. Its firewall is not the
   reported problem.
 - **Relay:** the process that actually owns the network sockets receiving the
@@ -43,19 +45,20 @@ this discovery in the shared core and diagnostic CLI.
 
 Initial scope: one viewer, one remote profile, one active Screen Sharing session,
 native menu bar app, a useful diagnostics panel, and a downloadable DMG.
-The user confirmed a viewer-only installation is preferred. Plan v1 around that
-boundary; a remote companion would require a later explicit scope change. No
-public relay service is planned.
+Installation on the controlling Mac alone is preferred. The user explicitly
+confirmed that installation on both Macs is acceptable if a remote companion
+is needed. Both deployment options are within scope; a companion does not need
+another scope confirmation. No public relay service is planned.
 
 ## 2. What is established and what is not
 
 | Item | Evidence / conclusion |
 | --- | --- |
 | Native UI and release design | Native diagnostic app with one-button ZIP export and a styled DMG. |
-| High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. Independent implementation identifies encrypted media with feedback multiplexed on media ports. Target-session flows remain unmeasured. |
+| High Performance transport | Apple documents TCP 5900 control and UDP 5900–5902 RTP/RTCP. A user-confirmed working session on an unrestricted viewer shows Screen Sharing TCP to 5900, avconferenced UDP 5900 to the same peer, and wildcard UDP 5901 across ten snapshots. The restricted viewer remains unmeasured. |
 | Media addressing | Supplied server derives local/peer IPs from TCP and initializes media ports from managed `portBase` (default 5900). Viewer binding behavior remains unknown. |
 | Firewall problem | Reported by the user; not independently reproduced. The exact firewall implementation and receiving executable remain to be identified. |
-| Allowed process | The user recalls that `proxyd`, rather than `/usr/bin/python3`, is allowed. Its exact identity, supported interfaces and actual permission are unconfirmed. |
+| Allowed process | The restricted viewer's permitted executable is still unconfirmed. The unrestricted viewer has five allowed Python/Ruby entries and no exact proxyd; /usr/bin/python3 identifies as an Xcode launcher shim. |
 | Development host | Debian Linux x86_64 with verified Swift 6.2 and Python. Native builds/app smoke tests run on GitHub macOS CI. |
 | Current application state | Native diagnostic GUI/CLI, portable process/protocol/lifecycle core and 57 tests exist. No functioning relay or successful proxied session is established. |
 
@@ -63,8 +66,9 @@ public relay service is planned.
 login/control while video or feedback continues directly to a blocked UDP socket.
 Standard Screen Sharing success is not High Performance success.
 
-The user's clarification makes **identify `proxyd` and its capabilities** the
-first investigation. Do not select Python as the receiving process by default.
+**Identify the permitted receiving executable and its capabilities** on the
+restricted Mac. The unrestricted Mac's Python/Ruby allow entries are candidates
+for investigation; do not require an exact proxyd or select Python by default.
 A Python process does not run "through proxyd" merely because it is launched
 from another process. A launchd parent, process name, port number, or copied
 executable name does not establish firewall identity. Check the executable that
@@ -177,6 +181,16 @@ may distribute packets incorrectly or loop them. Relaying a TCP connection does
 not automatically redirect separately negotiated UDP streams. A generic SOCKS
 service, SSH TCP forward, or remote companion alone does not resolve these issues.
 
+The remote companion option is now authorized if needed. Evaluate paired local
+relays with a viewer-initiated connection between them: the outer transport can
+use separate ports while each relay presents the local addresses/ports expected
+by its Apple endpoint. Preserve the full control stream and bidirectional media
+datagrams, and authenticate the paired relays. This is an experiment, not a proven
+path. Test local socket coexistence and source-tuple acceptance on both Macs;
+adding a companion does not remove wildcard binding conflicts. Validate working
+video and keyboard/mouse control on the unrestricted pair first, then repeat
+under the restricted viewer's existing firewall rules.
+
 ### 3.4 Choose one proven design
 
 | Result | Decision |
@@ -184,7 +198,8 @@ service, SSH TCP forward, or remote companion alone does not resolve these issue
 | Existing allowed system service exposes a supported interface that carries the complete session | Use that interface; do not introduce a Python dependency without a purpose. |
 | Python can own the necessary sockets and all endpoints can be routed through it without privileged interception | Use the supervised Python relay described below. This is the preferred Python design. |
 | Only narrowly scoped local packet redirection can make the relay path work | Treat this as a privileged architecture change. Prove packet-filter ordering, socket attribution, source-tuple preservation, return routing and cleanup before proposing the helper. |
-| A remote companion or a packet tunnel is required | This exceeds the preferred viewer-only/simple-relay design. Document the evidence and required scope change; do not implement it without agreement. Prove the full path; do not assume a companion fixes negotiation. |
+| A remote companion is required | Within the user's authorized scope. Implement the paired relay design once the experiment proves the complete path; document why the single-Mac option fails. |
+| A packet tunnel or other privileged network mechanism is required | This is a separate architecture change. Document required permissions, entitlements and routing effects before implementation; companion authorization does not establish permission for these changes. |
 | No complete path works under the existing constraints | Record the failed hypothesis and required constraint change. Do not ship a TCP-only app claiming to fix High Performance mode. |
 
 Any privileged variant needs its own design record and tests. A packet-filter
@@ -480,10 +495,10 @@ standard-mode screen sharing, or macOS compilation passes.
 
 ## 10. Implementation order and handoff
 
-1. **Feasibility evidence:** identify the recalled `proxyd` executable, establish
-   its supported forwarding capabilities within the viewer-only scope;
-   add the diagnostic collector, run the two-Mac experiment, and write the
-   transport findings and decision record. This is the first implementation task.
+1. **Feasibility evidence:** identify a permitted receiving executable on the
+   restricted viewer, using the working unrestricted capture as a reference.
+   Test the single-Mac relay and, when needed, the authorized remote companion;
+   prove the full interactive session and record the chosen transport.
 2. **Transport slice:** build the selected backend and realistic TCP/UDP fixtures;
    demonstrate the same successful path through the production backend.
 3. **Native shell and lifecycle:** add package/core/app targets, process control,
@@ -508,11 +523,12 @@ switch has occurred; the user will choose when to move simpler work to Sol.
 
 ### Pending observations, with defaults that do not block planning
 
-- Exact executable currently permitted: **user recalls `proxyd`, not Python;
-  exact path and capabilities must be measured before choosing the backend**.
-  No assumption that `proxyd` and Python are equivalent.
-- Deployment: **viewer-only preferred, confirmed by the user**. A companion is
-  outside the v1 plan unless the user later accepts a necessary scope change.
+- Exact executable permitted on the restricted viewer: **still to be measured**.
+  The unrestricted viewer has allowed Python/Ruby candidates and no exact proxyd;
+  do not transfer its firewall permissions to another Mac by assumption.
+- Deployment: **controlling-Mac-only preferred; installation on both Macs is
+  explicitly acceptable if needed**, confirmed by the user. Full interactive
+  control is required in either deployment.
 - Access to the two Macs: **not available in this Linux session**. Prepare the
   experiment for a later Mac session; do not claim a remote connection was tested.
 - Firewall implementation and OS builds: **record during the first experiment**.
