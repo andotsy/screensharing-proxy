@@ -13,6 +13,7 @@ enum NativeEntry {
         let delegate = AppDelegate()
         if arguments.count == 2, arguments[0] == "--smoke-test" {
             delegate.smokeDestination = URL(fileURLWithPath: arguments[1])
+            FileHandle.standardError.write(Data("Starting native smoke app\n".utf8))
         }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var smokeDestination: URL?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if smokeDestination != nil { FileHandle.standardError.write(Data("Application finished launching\n".utf8)) }
         installMenu()
         panel.show()
         saver.parentWindow = panel.windowForSheet
@@ -41,8 +43,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let smokeDestination else { return }
         saver.smokeDestination = smokeDestination
         model.collect()
+        FileHandle.standardError.write(Data("Collection started\n".utf8))
+        Task {
+            try? await Task.sleep(for: .seconds(60))
+            FileHandle.standardError.write(Data("Native smoke watchdog: activity=\(model.activity), savePanelPresented=\(saver.presented)\n".utf8))
+            exit(1)
+        }
         Task {
             await model.waitForCompletion()
+            FileHandle.standardError.write(Data("Collection and save finished\n".utf8))
             guard panel.hasVisibleContent, saver.presented,
                   FileManager.default.fileExists(atPath: smokeDestination.path),
                   model.collection?.report.platform == "macOS",

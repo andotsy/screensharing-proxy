@@ -22,7 +22,11 @@ def main():
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     with tempfile.TemporaryDirectory(prefix="ssp-app-") as temporary:
         report = Path(temporary) / "diagnostics.zip"
-        result = subprocess.run([str(binary), "--smoke-test", str(report)], capture_output=True, text=True, timeout=90)
+        try:
+            result = subprocess.run([str(binary), "--smoke-test", str(report)], capture_output=True, text=True, timeout=90)
+        except subprocess.TimeoutExpired as error:
+            print(error.stdout or b"", error.stderr or b"", flush=True)
+            raise
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Native collection, save dialog and ZIP export passed." in result.stdout
         with zipfile.ZipFile(report) as archive:
