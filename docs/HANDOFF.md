@@ -21,6 +21,20 @@ nor adding a separate address alone establishes native interoperability. Read
 HIGH_PERFORMANCE_RESEARCH.md for the exact evidence and version limits. Native
 app, resource, smoke and DMG checks pass at b2519df; no live relay is validated.
 
+Latest follow-up: Scripts/probe-udp-reuse.rb finds that all 16 same-loopback-port
+combinations fail to exchange packets bidirectionally on macOS. However, a
+connected network socket reserved first can coexist with a native unconnected
+socket after the native connect returns EADDRINUSE. A Ruby model successfully
+receives remote traffic, forwards it locally to that socket, and sends native
+feedback directly with an explicit destination. Scripts/probe-native-udp.m
+invokes the actual Apple UDP helper and confirms it returns a wildcard,
+unconnected descriptor which accepts a local test packet at the media port.
+Read RUBY_RELAY_EXPERIMENT.md for the evidence links and scope limits. The next
+candidate can keep TCP direct and relay incoming UDP only, but AVConference's
+source acceptance, explicit-destination feedback, startup conflicts, effective
+firewall treatment and live behavior on the restricted OS remain gates. The
+existing relay.rb does not implement this candidate. Do not enable it as if it did.
+
 The user authorized implementation on the current model on 2026-10-17, with
 complex infrastructure first and simpler UI/distribution work later on Sol.
 

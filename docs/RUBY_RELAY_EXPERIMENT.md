@@ -4,6 +4,11 @@ Status: the transport implementation passes local tests, but the proposed native
 connection path is **blocked under the no-interface-change constraint**. It is
 not enabled in the application and is not a functioning High Performance proxy.
 
+A different incoming-only candidate now passes macOS UDP delivery probes,
+including the actual native socket-creation helper. That candidate is described
+below; it is not yet implemented by `Resources/relay.rb`, and AVConference/live
+High Performance behavior remains untested.
+
 The user selected system Ruby after the restricted Mac listed /usr/bin/ruby as
 allowed and the Python runtime as blocked. This is an experimental data path;
 only a live High Performance session can establish that Apple accepts it.
@@ -111,3 +116,82 @@ demonstrate native viewer media binding/port selection under unchanged interface
 configuration, or establish a separately authorized packet-delivery mechanism.
 Neither encrypted negotiation rewriting nor privileged packet injection has
 been implemented or established by this experiment.
+
+## Socket reuse and a different incoming path
+
+`Scripts/probe-udp-reuse.rb` exercises 16 combinations of binding order, relay
+reuse options, wildcard/specific binding and connected/unconnected relay sockets
+on the existing loopback address. It uses ephemeral ports, bounded synthetic
+packets and owned sockets; it changes no interface, route or firewall settings.
+A separate-port control checks that the fixture observes both directions.
+
+On macOS 26.6.2 (25G83), system Ruby 2.6.10, five same-port cases fail to bind;
+eleven permit traffic but deliver both senders' packets to one socket. None
+exchange packets in both directions. The four-packet-per-direction control
+passes. Linux differs in duplicate-connect behavior, so Linux outcomes cannot
+substitute for Darwin. See [run 39068526125, evidence job](https://github.com/andotsy/screensharing-proxy/actions/runs/39068526125/job/117501103435).
+
+Darwin's duplicate connected tuple produces EADDRINUSE. When the native pattern
+opens second, its bind can succeed and its failed connect leaves it wildcard
+and unconnected. The inspected Apple helper deliberately returns that descriptor.
+This suggests a different design, without a loopback TCP proxy:
+
+```text
+Native Screen Sharing -- normal TCP control --> remote Mac
+Remote media ---------> Ruby's connected UDP socket on the viewer's LAN IP
+                        Ruby forwards unchanged bytes from a separate local socket
+                        --> native unconnected UDP socket
+Native feedback ------> remote Mac, directly, with an explicit UDP destination
+```
+
+Ruby must bind/connect the exact remote media tuples before the native client
+opens them. It can then receive the external packets on its connected sockets.
+Locally forwarded packets have a different source tuple, so they can reach the
+native unconnected socket instead of returning to Ruby. This is normal UDP
+delivery through owned sockets, not raw-packet injection. No interface alias,
+packet-filter rule, service restart or control-stream rewriting is involved.
+
+The follow-up [Ruby model](https://github.com/andotsy/screensharing-proxy/actions/runs/39068822986/job/117501981543)
+demonstrates remote-to-relay receipt, local delivery to the native-pattern socket,
+and direct feedback to the remote fixture with the expected source port. Sending
+feedback without a destination fails with EDESTADDRREQ. For this bounded
+one-machine model, different ephemeral loopback ports stand in for different
+Mac addresses; it does not execute Apple's media implementation.
+
+`Scripts/probe-native-udp.m` then invokes the **actual** inspected
+`+[SSSession udpSocketWithAVCMediaStreamConfig:port:]` method with a minimal
+configuration fixture. It first reserves a connected tuple using the route's
+existing source address and a documentation-only remote IP. UDP connect selects
+the route without sending data to that IP. Local and remote media ports are
+equal, as in the native method. Only a random local test packet is transmitted.
+The [native-helper evidence job](https://github.com/andotsy/screensharing-proxy/actions/runs/39069041292/job/117502634477)
+reports:
+
+- A valid native descriptor at the expected media port.
+- Wildcard local binding and ENOTCONN from getpeername.
+- Exact local payload/source delivery to the native socket.
+- No local packet delivered to the reserved connected socket.
+
+The helper runs in the fixture process, not Apple's viewer/avconferenced
+processes. It proves this method and kernel can provide the candidate's receive
+path on that CI build; it does not prove firewall attribution or SRTP processing.
+
+Before treating this as a usable relay, establish all of the following:
+
+1. AVConference preserves the unconnected socket and accepts authenticated media
+   delivered from the local forwarding source, rather than requiring the remote
+   source tuple in user space.
+2. Its outbound RTP/RTCP path supplies the remote destination. A plain send on
+   this unconnected descriptor cannot supply feedback.
+3. The restricted OS build behaves compatibly, allows external receipt by the
+   selected Ruby executable, and permits the local delivery under its existing
+   filter rules. Descriptor ownership alone does not settle effective identity.
+4. Startup ordering is safe: detect an existing conflicting session, fail instead
+   of taking it over, and clean up only app-owned sockets. Keep TCP direct and
+   match the real viewer source address, remote address and configured media base.
+5. The resulting session has High Performance video, audio when enabled, input,
+   feedback/recovery, reconnect and bounded sustained resource use.
+
+This candidate refines the design rather than proving every earlier conflict
+assumption false. The separate-address relay remains disabled; do not silently
+relabel it as the new incoming-only path or claim the model opened a full session.

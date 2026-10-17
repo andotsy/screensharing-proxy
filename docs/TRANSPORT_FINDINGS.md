@@ -11,6 +11,15 @@ source/destination address. The proposed native path therefore requires a new
 demonstrated binding mechanism under the user's constraint. It is not enabled
 in the app, and no working High Performance relay is claimed.
 
+A subsequent UDP reuse experiment now demonstrates a candidate incoming path
+without aliases: reserve the network tuple first, let the native helper return
+an unconnected socket after its tolerated duplicate-connect error, and forward
+incoming bytes locally to that socket. The actual native helper accepts the
+local test packet on macOS 26.6.2 CI. AVConference source validation, outbound
+feedback and the restricted Mac's filter remain untested. This candidate is
+separate from the implemented address-separated relay; see the
+[probe results and acceptance gates](RUBY_RELAY_EXPERIMENT.md#socket-reuse-and-a-different-incoming-path).
+
 See [the service and transport research](HIGH_PERFORMANCE_RESEARCH.md) for pinned
 sources, attachment hashes, disassembly evidence and the concrete experiment.
 The earlier generic TCP/UDP hypothesis was insufficient as a transport design.
