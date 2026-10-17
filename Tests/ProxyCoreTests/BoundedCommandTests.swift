@@ -24,11 +24,31 @@ struct BoundedCommandTests {
         #expect(result.durationMilliseconds < 4_000)
     }
 
-    @Test func escalatesWhenTerminationIgnored() async {
-        let result = await runner.run(CommandSpec("/bin/sh", ["-c", "trap '' TERM; while :; do :; done"], timeout: 0.15))
-        #expect(result.outcome == .timedOut)
+    @Test func cancellationEscalatesAfterChildInstallsTermHandler() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ssp-term-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let marker = directory.appendingPathComponent("ready")
+        // A short wall-clock deadline can fire before /bin/sh installs its
+        // handler on a busy runner. Synchronize with the child before testing
+        // escalation; cancellation uses the same TERM/KILL path as timeout.
+        let task = Task {
+            await runner.run(CommandSpec("/bin/sh", ["-c",
+                "trap '' TERM; printf ready > \"$1\"; while :; do :; done", "ssp-fixture", marker.path], timeout: 10))
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        var ready = false
+        while ContinuousClock.now < deadline {
+            if (try? Data(contentsOf: marker)) == Data("ready".utf8) { ready = true; break }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        let cancelledAt = ContinuousClock.now
+        task.cancel()
+        let result = await task.value // Always reap before asserting readiness.
+        try #require(ready)
+        #expect(result.outcome == .cancelled)
         #expect(result.terminationSignal == 9)
-        #expect(result.durationMilliseconds < 4_000)
+        #expect(cancelledAt.duration(to: .now) < .seconds(4))
     }
 
     @Test func cleansUpDescendantHoldingPipesAfterRootExits() async {
