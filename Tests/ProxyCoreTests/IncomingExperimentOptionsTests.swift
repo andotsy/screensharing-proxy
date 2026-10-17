@@ -5,16 +5,20 @@ import Testing
 @Suite struct IncomingExperimentOptionsTests {
     @Test func viewerLaunchIsExplicitAndRestrictedToLoopback() throws {
         let required = ["--remote", "192.0.2.1", "--output", "result.json"]
-        let manual = try IncomingExperimentOptions(arguments: ["loopback"] + required)
+        let loopback = ["loopback"] + required
+        let incoming = ["incoming"] + required
+        let manual = try IncomingExperimentOptions(arguments: loopback)
         #expect(!manual.openViewer)
-        for arguments in [["loopback", "--open-viewer"] + required, ["loopback"] + required + ["--open-viewer"]] {
+        let enabled: [[String]] = [["loopback", "--open-viewer"] + required, loopback + ["--open-viewer"]]
+        for arguments in enabled {
             #expect(try IncomingExperimentOptions(arguments: arguments).openViewer)
         }
-        for arguments in [
-            ["incoming"] + required + ["--open-viewer"],
-            ["loopback"] + required + ["--open-viewer", "--open-viewer"],
-            ["loopback"] + required + ["--open-viewer", "true"],
-        ] {
+        let invalid: [[String]] = [
+            incoming + ["--open-viewer"],
+            loopback + ["--open-viewer", "--open-viewer"],
+            loopback + ["--open-viewer", "true"],
+        ]
+        for arguments in invalid {
             #expect(throws: IncomingExperimentOptions.InvalidInvocation.self) {
                 try IncomingExperimentOptions(arguments: arguments)
             }
