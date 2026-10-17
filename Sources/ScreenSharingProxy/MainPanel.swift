@@ -21,7 +21,6 @@ struct MainPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             HStack(spacing: 8) {
                 ForEach(AppPane.allCases, id: \.self) { item in
                     Button { pane = item } label: {
@@ -40,7 +39,7 @@ struct MainPanel: View {
                     .accessibilityAddTraits(pane == item ? [.isSelected] : [])
                 }
             }
-            .padding(.bottom, 12).frame(maxWidth: .infinity)
+            .padding(.vertical, 12).frame(maxWidth: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
             Divider()
             ScrollView {
@@ -55,22 +54,6 @@ struct MainPanel: View {
             .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
         }
         .background { WindowMaterial().allowsHitTesting(false).accessibilityHidden(true) }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 46, height: 46)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Screen Sharing Proxy").font(.title3.weight(.semibold))
-                Text("Screen Sharing tools for macOS").font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text("ALPHA").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(.primary.opacity(0.06), in: .capsule)
-        }
-        .padding(20).background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var diagnostics: some View {

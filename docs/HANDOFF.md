@@ -149,3 +149,5 @@ installed-app acceptance check.
 Alpha 5 orders the tabs Proxy, Settings, Diagnostics. Diagnostics is still the
 selected, enabled tab. Keep the user's updated Icon Composer document as the
 app icon source for future releases; do not restore the earlier generated PNG.
+The content header (icon, app name and ALPHA badge) is removed; tabs sit directly
+below the native window title.
