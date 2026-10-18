@@ -31,8 +31,7 @@ sockets move to Ruby. The download contains none of Apple's files.
    works without an admin password.
 3. Open **Screen Sharing Rubyfied**. If Screen Sharing is already running, it
    asks to quit it first. Allow Local Network access when macOS asks.
-4. Connect with the other Mac's real IPv4 address (not 127.0.0.1) and choose
-   High Performance.
+4. Connect with the other Mac's IPv4 address and choose High Performance.
 
 The app is ad hoc signed, not notarized. If macOS won't open it, see
 [the install guide](docs/INSTALL.md#if-macos-blocks-the-app).
