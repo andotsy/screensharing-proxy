@@ -60,7 +60,7 @@ struct RubyfierPane: View {
             .background(.background.secondary, in: .rect(cornerRadius: 10))
             .clipShape(.rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.5)))
-            Text("Experimental · High Performance relay validation is still in progress.")
+            Text("High Performance video, audio, and control through Ruby.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(24)

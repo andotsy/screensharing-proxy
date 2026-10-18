@@ -369,7 +369,14 @@ module ScreenSharingRelay
         @stopping = true
         return
       end
-      raise Failure.new('connectionTimedOut') if (@listener && !@server && now >= @accept_deadline) || (@connecting && now >= @connect_deadline)
+      if @connecting && now >= @connect_deadline
+        @operation = 'hostConnect'
+        raise Failure.new('connectionTimedOut')
+      end
+      if @listener && !@server && now >= @accept_deadline
+        @operation = 'viewerAccept'
+        raise Failure.new('connectionTimedOut')
+      end
       reads = [@input] + @udp_routes.keys
       reads << @listener if @listener && !@server
       writes = @out.empty? ? [] : [@output]

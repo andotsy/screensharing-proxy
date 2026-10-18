@@ -50,7 +50,7 @@ struct MainPanel: View {
             HStack {
                 Text("v\(ProxyBuild.version)")
                 Spacer()
-                Text("Local experimental build")
+                Text("Version \(ProxyBuild.version)")
             }
             .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
         }

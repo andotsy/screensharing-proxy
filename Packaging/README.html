@@ -11,19 +11,23 @@ pre{overflow:auto;padding:16px;border:1px solid #728b9e;border-radius:12px;font-
 button{font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer}a{color:inherit}
 </style>
 <h1>Screen Sharing Rubyfier</h1>
-<p>Local experimental build · Apple silicon</p>
+<p>Version 1.0.0 · Apple silicon</p>
 <p class="notice">Adds our Ruby relay to a separate copy of Screen Sharing.
 Your original app stays untouched. This build accepts the tested Screen Sharing
-executable from macOS 26.7.1 (25G241). Live High Performance operation remains unverified.</p>
+executable from macOS 26.7.1 (25G241). High Performance video, audio, and keyboard/mouse
+control have been verified on that build.</p>
 <h2>Create your app</h2>
 <ol><li>Drag <strong>Screen Sharing Rubyfier.app</strong> onto <strong>Applications</strong>.</li>
 <li>On the <strong>controlling Mac</strong>, open Rubyfier and click <strong>Create Rubyfied App…</strong>.
 Choose a writable folder, such as your user Applications folder.</li>
 <li>Open <strong>Screen Sharing Rubyfied.app</strong>. If the original viewer is open,
-the copy offers to quit it; this disconnects its viewer sessions.</li>
+the copy offers to quit it; this disconnects its viewer sessions. Allow <strong>Local Network</strong>
+access when macOS asks. If previously denied, enable Rubyfied in System Settings →
+Privacy &amp; Security → Local Network.</li>
 <li>Enter the remote Mac’s <strong>real IPv4 address</strong> in the native connection window.
 Authenticate normally and choose High Performance when offered. Do not enter 127.0.0.1 or port 15900.</li>
-<li>Quit Rubyfied to stop its relay. Quit and reopen before changing hosts or retrying a failed relay.</li></ol>
+<li>Quit Rubyfied to stop its relay. A new attempt can restart a stopped relay, up to
+three times per minute. Quit and reopen before changing an active host.</li></ol>
 <p>The patcher bundles optool, the compiled library and relay scripts. No Xcode,
 command line tools, Python or gems need to be installed. An existing Rubyfied app
 is never overwritten. No network or sharing-service settings are changed.</p>
@@ -33,9 +37,10 @@ selectable; <strong>Copy All</strong> copies the log.</p>
 <p><strong>Diagnostics → Collect Diagnostics</strong> collects a ZIP and opens a save dialog.
 Rubyfied writes private transport counters to
 <code>~/Library/Logs/Screen Sharing Rubyfied/latest-session.json</code>.</p>
-<p>Local tests passed for native UI launch, a synthetic TCP handshake and three
-bidirectional native UDP channels. These checks do not establish live video,
-keyboard/mouse, performance or receiving permission under restricted network rules.</p>
+<p>Live High Performance video, audio, and keyboard/mouse control have been verified.
+Automated tests cover native sign-in, retry recovery and three bidirectional media
+channels. Sustained performance and receiving permission under the restricted
+viewer’s network rules remain unverified.</p>
 <h2>If macOS blocks the app</h2>
 <p>This build is ad hoc signed and not notarized. After installing it in
 Applications, open the included Terminal shortcut and paste the command below.

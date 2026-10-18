@@ -1,4 +1,4 @@
-name: Release native app alpha
+name: Release Screen Sharing Rubyfier
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing app alpha tag (for example v0.1.0-alpha.5)'
+        description: 'Existing release tag (for example v1.0.0)'
         required: true
         type: string
 
@@ -38,7 +38,7 @@ jobs:
 
       - name: Validate tag and toolchain
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
           test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
           test "$(uname -m)" = arm64
           xcodebuild -version
@@ -54,6 +54,9 @@ jobs:
         run: |
           swift build -Xswiftc -warnings-as-errors
           swift test -Xswiftc -warnings-as-errors
+          python3 Scripts/test-loopback-relay.py
+          python3 Scripts/test-rubyfied-retry.py
+          python3 Scripts/test-rubyfied-media.py
           bash Packaging/build-app-dmg.sh
           python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
 
@@ -78,25 +81,31 @@ jobs:
           cd dist
           shasum -a 256 "$DMG_NAME" > SHA256SUMS
 
-      - name: Publish verified prerelease
+      - name: Publish verified release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           notes="docs/releases/$SSP_VERSION.md"
           test -s "$notes"
+          prerelease=false
+          latest=true
+          if [[ "$RELEASE_TAG" == *-alpha.* ]]; then
+            prerelease=true
+            latest=false
+          fi
           if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
             if [[ "$draft" != true ]]; then
               printf 'This release is already published; use a new version.\n' >&2
               exit 1
             fi
           else
-            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --latest=false \
-              --title "Screen Sharing Rubyfier $RELEASE_TAG — native app alpha" --notes-file "$notes"
+            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease="$prerelease" --latest=false \
+              --title "Screen Sharing Rubyfier $RELEASE_TAG" --notes-file "$notes"
           fi
           gh release upload "$RELEASE_TAG" "dist/$DMG_NAME" dist/SHA256SUMS --clobber
           download_dir=$(mktemp -d "$RUNNER_TEMP/ssp-download.XXXXXX")
           gh release download "$RELEASE_TAG" --dir "$download_dir" --pattern "$DMG_NAME" --pattern SHA256SUMS
           (cd "$download_dir" && shasum -a 256 -c SHA256SUMS)
           cmp "dist/$DMG_NAME" "$download_dir/$DMG_NAME"
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease" --latest="$latest"

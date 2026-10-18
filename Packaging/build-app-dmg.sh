@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=${SSP_VERSION:?Set SSP_VERSION to the release version}
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
 bash Packaging/build-app.sh
 mkdir -p dist
 dmg="dist/ScreenSharingRubyfier-v$version-macOS-arm64.dmg"

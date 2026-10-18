@@ -186,6 +186,39 @@ class LoopbackTests(LoopbackFixture):
                         probe.bind((free_address, self.base))
                 occupied.close()
 
+    def test_timeout_reports_the_pending_stage(self):
+        script = SUPPORT['OPTIONS'].script
+        for stage in ('viewerAccept', 'hostConnect'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(prefix='ssp-timeout-fixture-') as directory:
+                wrapper = Path(directory) / 'fixture.rb'
+                wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module ExpiredDeadlineFixture
+  def tick
+    if {json.dumps(stage)} == 'viewerAccept'
+      @accept_deadline = 0
+    elsif @server
+      @connecting = true
+      @remote_connected = false
+      @tcp_connected = 0
+      @connect_deadline = 0
+    end
+    super
+  end
+end
+ScreenSharingRelay::LoopbackRelay.prepend(ExpiredDeadlineFixture)
+exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
+""")
+                child = Child(self.config, script=wrapper)
+                self.children.append(child)
+                child.event('ready')
+                if stage == 'hostConnect':
+                    client = self.own(socket.socket())
+                    client.connect(('127.0.0.1', self.listener_port))
+                self.assertEqual(child.event('failureContext'), {'operation': stage, 'systemError': None})
+                self.assertEqual(child.event('failed')['code'], 'connectionTimedOut')
+                self.assertEqual(child.process.wait(timeout=3), 1)
+
     def test_tcp_listener_conflict_is_distinguished_from_media_and_preserves_owner(self):
         with socket.socket() as occupied:
             occupied.bind(('127.0.0.1', self.listener_port))

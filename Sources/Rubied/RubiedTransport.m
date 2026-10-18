@@ -1,15 +1,17 @@
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <math.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <xpc/xpc.h>
 
-// Experimental, version-specific adapter. Apple's UI resolves the real host
+// Version-specific adapter. Apple's UI resolves the real host
 // and retains its login identity. Only the engine's transport address changes.
 typedef void (*ConnectIMP)(id, SEL, id, id, double);
 static ConnectIMP originalConnect;
@@ -29,6 +31,10 @@ static uint16_t probeRemoteBase;
 static NSMutableData *pendingEvents;
 static NSMutableDictionary *report;
 static dispatch_queue_t eventQueue;
+static dispatch_group_t relayReader;
+static NSMutableArray<NSNumber *> *relayRestartTimes;
+static NSUInteger relayGeneration;
+static double firstConnectTime;
 static BOOL probeMode;
 static unsigned udpCalls;
 static NSString *failure;
@@ -103,8 +109,10 @@ static NSString *relayFailureMessage(void) {
             detail = @"This viewer already has a relay for another host address. Quit Rubyfied and reopen it to select this host.";
         } else if ([code isEqual:@"differentPortSelected"]) {
             detail = @"This viewer already has a relay for another TCP port. Quit Rubyfied and reopen it to change ports.";
-        } else if ([code isEqual:@"relayStopped"]) {
-            detail = @"The relay stopped before this connection attempt. Quit Rubyfied and reopen it before retrying.";
+        } else if ([code isEqual:@"relayCleanupPending"]) {
+            detail = @"The previous relay is still finishing cleanup. Retry this connection shortly.";
+        } else if ([code isEqual:@"relayRetryLimit"]) {
+            detail = @"The relay has restarted three times within one minute. Wait a minute before retrying. The report retains the preceding failures.";
         } else {
             NSDictionary *context = report[@"failureContext"];
             NSString *backendCode = report[@"failed"][@"code"];
@@ -120,11 +128,47 @@ static NSString *relayFailureMessage(void) {
 }
 
 static BOOL startRelay(NSString *host, uint16_t port) {
-    if (relay) {
-        if (!relay.running) return recordStartFailure(@"relayStopped");
+    if (relay && relay.running) {
         if (![relayHost isEqual:host]) return recordStartFailure(@"differentHostSelected");
         if (relayRemotePort != port) return recordStartFailure(@"differentPortSelected");
         return YES;
+    }
+    if (relay) {
+        // The prior reader must consume EOF before a new generation may touch
+        // pendingEvents or report. Bound the wait rather than blocking on sync.
+        if (relayReader && dispatch_group_wait(relayReader,
+                dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) != 0) {
+            return recordStartFailure(@"relayCleanupPending");
+        }
+        double now = NSProcessInfo.processInfo.systemUptime;
+        if (!relayRestartTimes) relayRestartTimes = [NSMutableArray new];
+        while (relayRestartTimes.count && now - relayRestartTimes.firstObject.doubleValue >= 60) {
+            [relayRestartTimes removeObjectAtIndex:0];
+        }
+        if (relayRestartTimes.count >= 3) return recordStartFailure(@"relayRetryLimit");
+        [relayRestartTimes addObject:@(now)];
+        relay = nil;
+        relayInput = nil;
+        relayReader = nil;
+    }
+    @synchronized(report) {
+        NSArray *backendKeys = @[@"ready", @"traffic", @"media", @"control", @"controlConnections",
+            @"failureContext", @"failed", @"stopped", @"adapterFailure", @"relayConfiguration", @"relayGeneration"];
+        if (relayGeneration) {
+            NSMutableArray *previous = [report[@"previousAttempts"] mutableCopy] ?: [NSMutableArray new];
+            NSMutableDictionary *snapshot = [NSMutableDictionary new];
+            for (NSString *key in backendKeys) if (report[key]) snapshot[key] = report[key];
+            [previous addObject:snapshot];
+            if (previous.count > 3) [previous removeObjectAtIndex:0];
+            report[@"previousAttempts"] = previous;
+        }
+        for (NSString *key in backendKeys) [report removeObjectForKey:key];
+        [pendingEvents setLength:0];
+        failure = nil;
+        report[@"relayGeneration"] = @(++relayGeneration);
+        report[@"relayConfiguration"] = @{@"remoteControlPort":@(port), @"listenerPort":@(listenerPort),
+            @"mediaBase":@(mediaBase), @"nativeMediaBase":@(nativeMediaBase)};
+        saveReport();
     }
     relayHost = host;
     relayRemotePort = port;
@@ -160,7 +204,8 @@ static BOOL startRelay(NSString *host, uint16_t port) {
         ready = consumeEvents([NSData dataWithBytes:buffer length:(NSUInteger)length]);
     }
     if (!ready) { if (!failure) failure = @"relayStartupTimeout"; stopRelay(); return recordStartFailure(failure); }
-    dispatch_async(eventQueue, ^{
+    relayReader = dispatch_group_create();
+    dispatch_group_async(relayReader, eventQueue, ^{
         for (;;) {
             uint8_t buffer[8192];
             ssize_t length = read(fd, buffer, sizeof(buffer));
@@ -196,22 +241,52 @@ static void refuse(id session, NSString *message) {
     });
 }
 
+static void recordConnectionRequest(NSString *host, uint16_t port, BOOL loopback, id options, double timeout) {
+    @synchronized(report) {
+        double now = NSProcessInfo.processInfo.systemUptime;
+        if (!firstConnectTime) firstConnectTime = now;
+        NSMutableArray *requests = [report[@"connectionRequests"] mutableCopy] ?: [NSMutableArray new];
+        NSMutableDictionary *request = [@{@"elapsedMilliseconds":@((unsigned long long)((now - firstConnectTime) * 1000)),
+            @"port":@(port), @"loopback":@(loopback), @"relayExists":@(relay != nil),
+            @"relayRunning":@(relay.running), @"sameHostAsRelay":@([relayHost isEqual:host]),
+            @"samePortAsRelay":@(relayRemotePort == port)} mutableCopy];
+        if (isfinite(timeout) && timeout >= 0 && timeout <= 300) request[@"nativeTimeoutSeconds"] = @(timeout);
+        // These are observed option values, not an inferred mode label.
+        for (NSString *name in @[@"screenQualityMode", @"numVirtualDisplays"]) {
+            SEL getter = NSSelectorFromString(name);
+            if ([options respondsToSelector:getter]) request[name] = @(((NSInteger (*)(id, SEL))objc_msgSend)(options, getter));
+        }
+        SEL display = NSSelectorFromString(@"displayConfiguration");
+        if ([options respondsToSelector:display]) {
+            request[@"hasDisplayConfiguration"] = @(((id (*)(id, SEL))objc_msgSend)(options, display) != nil);
+        }
+        [requests addObject:request];
+        if (requests.count > 16) [requests removeObjectAtIndex:0];
+        report[@"connectionRequests"] = requests;
+        saveReport();
+    }
+}
+
 static void connectThroughRuby(id session, SEL selector, id address, id options, double timeout) {
     struct in6_addr bytes = ((struct in6_addr (*)(id, SEL))objc_msgSend)(address, NSSelectorFromString(@"address"));
     uint16_t port = ((uint16_t (*)(id, SEL))objc_msgSend)(address, NSSelectorFromString(@"port"));
     if (!port) port = 5900;
-    if (IN6_IS_ADDR_V4MAPPED(&bytes) && bytes.s6_addr[12] == 127 && port == listenerPort && relay.running) {
+    char ip[INET_ADDRSTRLEN] = {0};
+    BOOL mapped = IN6_IS_ADDR_V4MAPPED(&bytes);
+    if (mapped) inet_ntop(AF_INET, &bytes.s6_addr[12], ip, sizeof(ip));
+    NSString *host = ip[0] ? [NSString stringWithUTF8String:ip] : nil;
+    recordConnectionRequest(host, port, mapped && bytes.s6_addr[12] == 127, options, timeout);
+    if (mapped && bytes.s6_addr[12] == 127 && port == listenerPort && relay.running) {
         originalConnect(session, selector, address, options, timeout);
         return;
     }
     if (!IN6_IS_ADDR_V4MAPPED(&bytes) || bytes.s6_addr[12] == 127 || port < 1024) {
-        refuse(session, @"This experimental build supports a remote IPv4 address. Enter the sharing Mac’s address, not localhost. No direct fallback was started.");
+        refuse(session, @"Enter the sharing Mac’s IPv4 address, not localhost. This build supports remote IPv4 connections.");
         return;
     }
-    char ip[INET_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET, &bytes.s6_addr[12], ip, sizeof(ip))) return;
+    if (!host) return;
     @synchronized(NSClassFromString(@"SSSession")) {
-        if (!startRelay([NSString stringWithUTF8String:ip], port)) {
+        if (!startRelay(host, port)) {
             refuse(session, relayFailureMessage());
             return;
         }
@@ -229,6 +304,169 @@ static void mediaEvent(NSString *counter) {
         report[@"nativeMedia"] = media;
         saveReport();
     }
+}
+
+// Ad-hoc copies cannot use avconferenced's protected media configuration
+// service. AVC's own in-process engine retains the negotiated native codecs,
+// keys and audio output. Its image queue must also remain in this process:
+// AVCRemoteVideoClient otherwise asks the service for an unrelated stream token.
+static NSMapTable<NSNumber *, id> *localVideoStreams;
+static long long (*originalVideoToken)(id, SEL);
+
+static id mediaObjectIvar(id object, const char *name) {
+    Ivar ivar = object ? class_getInstanceVariable(object_getClass(object), name) : NULL;
+    return ivar ? object_getIvar(object, ivar) : nil;
+}
+
+static BOOL useInProcessMedia(id stream, SEL selector, id options) {
+    (void)stream; (void)selector; (void)options;
+    mediaEvent(@"inProcessSelections");
+    return YES;
+}
+
+static long long rememberVideoStream(id stream, SEL selector) {
+    long long token = originalVideoToken(stream, selector);
+    id opaque = mediaObjectIvar(stream, "_opaqueStream");
+    if (opaque) @synchronized(localVideoStreams) { [localVideoStreams setObject:opaque forKey:@(token)]; }
+    return token;
+}
+
+@interface RubiedVideoClient : NSObject
+@property(nonatomic, weak) id delegate;
+@property(nonatomic) long long streamToken;
+@property(nonatomic) BOOL hasReceivedFirstFrame;
+@property(nonatomic) BOOL hasReceivedLastFrame;
+@property(nonatomic) BOOL isVideoPaused;
+@property(nonatomic) BOOL isMediaStalled;
+@property(nonatomic) BOOL isVideoDegraded;
+@property(nonatomic) BOOL isVideoSuspended;
+@property(nonatomic) BOOL isNetworkDegraded;
+@property(nonatomic) BOOL isNetworkDegradedLocal;
+@property(nonatomic) BOOL shouldDisplayVideoInfoLayer;
+@property(nonatomic, getter=isTransformForRemoteVideoOrientationEnabled) BOOL transformForRemoteVideoOrientationEnabled;
+@property(nonatomic, strong) id remoteVideoAttributes;
+@property(nonatomic, strong) id remoteScreenAttributes;
+@property(nonatomic, strong) NSTimer *timer;
+@property(nonatomic, strong) CALayer *targetLayer;
+@property(nonatomic, weak) id boundQueue;
+@property(nonatomic) BOOL slotSupplied;
+@property(nonatomic) BOOL terminated;
+@property(nonatomic) double lastReportTime;
+- (void)sample;
+- (void)terminateConnection;
+@end
+
+@implementation RubiedVideoClient
+- (id)stream {
+    @synchronized(localVideoStreams) { return [localVideoStreams objectForKey:@(self.streamToken)]; }
+}
+- (id)queue { return mediaObjectIvar([self stream], "_remoteQueue"); }
+- (NSNumber *)slotForMode:(int)mode {
+    (void)mode;
+    unsigned slot = ((unsigned (*)(id,SEL,id))objc_msgSend)([self queue], sel_registerName("setVideoDestination:"), nil);
+    if (slot && !self.slotSupplied) { self.slotSupplied = YES; mediaEvent(@"nativeImageQueueSlots"); }
+    return slot ? @(slot) : nil;
+}
+- (void)setVideoLayer:(CALayer *)layer forMode:(int)mode {
+    (void)mode;
+    self.targetLayer = layer;
+    self.boundQueue = nil;
+    [self sample];
+}
+- (void)setRootLayer:(CALayer *)layer { [self setVideoLayer:layer forMode:0]; }
+- (void)setRemoteVideoLayerBounds:(CGRect)bounds { self.targetLayer.bounds = bounds; }
+- (void)setLayerHostBounds:(CGRect)bounds { self.targetLayer.bounds = bounds; }
+- (void)sample {
+    if (self.terminated) return;
+    id stream = [self stream], queue = mediaObjectIvar(stream, "_remoteQueue");
+    if (!stream) { [self terminateConnection]; return; }
+    if (queue && self.targetLayer && self.boundQueue != queue) {
+        ((unsigned (*)(id,SEL,id))objc_msgSend)(queue, sel_registerName("setVideoDestination:"), self.targetLayer);
+        self.boundQueue = queue;
+        mediaEvent(@"nativeVideoLayerAttachments");
+    }
+    id attributes = mediaObjectIvar(stream, "_cachedRemoteScreenAttributes");
+    if (attributes && attributes != self.remoteVideoAttributes) {
+        self.remoteVideoAttributes = attributes;
+        self.remoteScreenAttributes = attributes;
+        SEL changed = sel_registerName("remoteVideoClient:remoteVideoAttributesDidChange:");
+        if ([self.delegate respondsToSelector:changed]) ((void (*)(id,SEL,id,id))objc_msgSend)(self.delegate, changed, self, attributes);
+    }
+    BOOL decoded = ((BOOL (*)(id,SEL))objc_msgSend)(stream, sel_registerName("didReceiveFirstFrame"));
+    if (decoded && !self.hasReceivedFirstFrame) {
+        self.hasReceivedFirstFrame = YES;
+        @synchronized(report) { report[@"highPerformanceSession"] = @"videoDecoded"; }
+        SEL first = sel_registerName("remoteVideoClientDidReceiveFirstFrame:");
+        if ([self.delegate respondsToSelector:first]) ((void (*)(id,SEL,id))objc_msgSend)(self.delegate, first, self);
+    }
+    double now = NSProcessInfo.processInfo.systemUptime;
+    if (now - self.lastReportTime >= 5) {
+        self.lastReportTime = now;
+        int frames = ((int (*)(id,SEL))objc_msgSend)(queue, sel_registerName("frameCount"));
+        @synchronized(report) {
+            // Last sampled stream only; firstFrames counts every stream. These
+            // scalar observations never copy frames or negotiated media data.
+            report[@"nativeVideo"] = @{@"execution":@"inProcess", @"renderer":@"nativeImageQueue",
+                @"didReceiveFirstFrame":@(decoded), @"imageQueueFrames":@(frames),
+                @"rendererReady":@(self.slotSupplied || self.boundQueue != nil)};
+            saveReport();
+        }
+    }
+}
+- (void)terminateConnection {
+    self.terminated = YES;
+    [self.timer invalidate]; self.timer = nil;
+    self.targetLayer.contents = nil;
+    self.targetLayer = nil; self.boundQueue = nil;
+}
+- (void)dealloc { [_timer invalidate]; }
+@end
+
+static id makeLocalVideoClient(id __attribute__((ns_consumed)) allocated, SEL selector, long long token, id endpoint, id delegate) __attribute__((ns_returns_retained));
+static id makeLocalVideoClient(id __attribute__((ns_consumed)) allocated, SEL selector, long long token, id endpoint, id delegate) {
+    (void)allocated; (void)selector; (void)endpoint;
+    RubiedVideoClient *client = [RubiedVideoClient new];
+    client.delegate = delegate; client.streamToken = token;
+    __weak RubiedVideoClient *weakClient = client;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        RubiedVideoClient *strongClient = weakClient;
+        if (!strongClient || strongClient.terminated) return;
+        strongClient.timer = [NSTimer timerWithTimeInterval:0.25 repeats:YES block:^(__unused NSTimer *timer) { [weakClient sample]; }];
+        [NSRunLoop.mainRunLoop addTimer:strongClient.timer forMode:NSRunLoopCommonModes];
+        [strongClient sample];
+    });
+    mediaEvent(@"localVideoClients");
+    return client;
+}
+
+static BOOL localMediaABIIsSupported(void) {
+    const char *classes[] = {"AVCVideoStream", "AVCAudioStream", "AVCVideoStream", "AVCRemoteVideoClient", "VCVideoStream", "VCImageQueue", "VCImageQueue"};
+    const char *selectors[] = {"shouldRunInProcessWithOptions:", "shouldRunInProcessWithOptions:", "streamToken", "initWithStreamToken:endpointID:delegate:", "didReceiveFirstFrame", "frameCount", "setVideoDestination:"};
+    const char *encodings[] = {"B24@0:8@16", "B24@0:8@16", "q16@0:8", "@40@0:8q16@24@32", "B16@0:8", "i16@0:8", "I24@0:8@16"};
+    for (unsigned i=0; i<sizeof(classes)/sizeof(classes[0]); ++i) {
+        Method method = class_getInstanceMethod(objc_getClass(classes[i]), sel_registerName(selectors[i]));
+        if (!method || strcmp(method_getTypeEncoding(method), encodings[i])) return NO;
+    }
+    const char *owners[] = {"AVCVideoStream", "VCVideoStream", "VCVideoStream"};
+    const char *names[] = {"_opaqueStream", "_remoteQueue", "_cachedRemoteScreenAttributes"};
+    const char *types[] = {"@\"VCVideoStream\"", "@\"VCImageQueue\"", "@\"VideoAttributes\""};
+    for (unsigned i=0; i<sizeof(owners)/sizeof(owners[0]); ++i) {
+        Ivar ivar = class_getInstanceVariable(objc_getClass(owners[i]), names[i]);
+        if (!ivar || strcmp(ivar_getTypeEncoding(ivar), types[i])) return NO;
+    }
+    return YES;
+}
+
+static void installLocalMedia(void) {
+    localVideoStreams = [NSMapTable strongToWeakObjectsMapTable];
+    for (NSString *name in @[@"AVCVideoStream", @"AVCAudioStream"]) {
+        Method method = class_getInstanceMethod(NSClassFromString(name), sel_registerName("shouldRunInProcessWithOptions:"));
+        method_setImplementation(method, (IMP)useInProcessMedia);
+    }
+    Method token = class_getInstanceMethod(NSClassFromString(@"AVCVideoStream"), sel_registerName("streamToken"));
+    originalVideoToken = (void *)method_setImplementation(token, (IMP)rememberVideoStream);
+    Method init = class_getInstanceMethod(NSClassFromString(@"AVCRemoteVideoClient"), sel_registerName("initWithStreamToken:endpointID:delegate:"));
+    method_setImplementation(init, (IMP)makeLocalVideoClient);
 }
 
 static void observeStreamStart(id session, SEL selector, id stream, BOOL started, id error) {
@@ -510,7 +748,7 @@ __attribute__((constructor)) static void installRubied(void) {
             Method method = class_getInstanceMethod(objc_getClass(classes[i]), sel_registerName(selectors[i]));
             mediaABI &= method && !strcmp(method_getTypeEncoding(method), encodings[i]);
         }
-        if (!streamStart || !firstFrame || !rtcp || !rtpTimeout || !rtcpTimeout || !mediaABI ||
+        if (!streamStart || !firstFrame || !rtcp || !rtpTimeout || !rtcpTimeout || !mediaABI || !localMediaABIIsSupported() ||
             strcmp(method_getTypeEncoding(streamStart), "v36@0:8@16B24@28") ||
             strcmp(method_getTypeEncoding(firstFrame), "v24@0:8@16") ||
             strcmp(method_getTypeEncoding(rtcp), "v32@0:8@16@24") ||
@@ -522,7 +760,7 @@ __attribute__((constructor)) static void installRubied(void) {
             _exit(78);
         }
         pendingEvents = [NSMutableData data];
-        report = [@{@"schemaVersion":@3, @"transportRevision":@4, @"experiment":@"rubied-native-copy", @"highPerformanceSession":@"unverified"} mutableCopy];
+        report = [@{@"schemaVersion":@5, @"transportRevision":@6, @"product":@"screen-sharing-rubyfier", @"highPerformanceSession":@"unverified"} mutableCopy];
         eventQueue = dispatch_queue_create("com.andotsy.rubied.events", DISPATCH_QUEUE_SERIAL);
         originalConnect = (ConnectIMP)method_setImplementation(connect, (IMP)connectThroughRuby);
         method_setImplementation(udp, (IMP)connectMediaThroughRuby);
@@ -531,6 +769,7 @@ __attribute__((constructor)) static void installRubied(void) {
         originalRTCP = (void *)method_setImplementation(rtcp, (IMP)observeRTCP);
         originalRTPTimeout = (void *)method_setImplementation(rtpTimeout, (IMP)observeRTPTimeout);
         originalRTCPTimeout = (void *)method_setImplementation(rtcpTimeout, (IMP)observeRTCPTimeout);
+        installLocalMedia();
         [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationWillTerminateNotification
             object:nil queue:nil usingBlock:^(__unused NSNotification *note) { stopRelay(); }];
         atexit(stopRelay);

@@ -14,7 +14,7 @@ let infoData = try Data(contentsOf: app.appendingPathComponent("Contents/Info.pl
 guard let info = try PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String: Any],
       info["CFBundleIdentifier"] as? String == "com.andotsy.screensharing-proxy",
       let version = info["SSPReleaseVersion"] as? String,
-      version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$"#, options: .regularExpression) != nil,
+      version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$"#, options: .regularExpression) != nil,
       let minimumSystemVersion = info["LSMinimumSystemVersion"] as? String,
       minimumSystemVersion.range(of: #"^[0-9]+(?:\.[0-9]+){0,2}$"#, options: .regularExpression) != nil else {
     throw NSError(domain: "ScreenSharingProxyPackaging", code: 2, userInfo: [

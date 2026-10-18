@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=${SSP_VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)}
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]
 test "$(uname -s)" = Darwin
 test "$(uname -m)" = arm64
 test "$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)" = "$version"

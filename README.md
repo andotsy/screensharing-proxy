@@ -1,7 +1,7 @@
 # Screen Sharing Rubyfier
 
-A native macOS patcher investigating a system Ruby transport for Apple's High
-Performance Screen Sharing. This is an **unreleased local experiment**.
+A native macOS patcher for High Performance Screen Sharing through system Ruby.
+**Version 1.0.0** supports native video, audio, and keyboard/mouse control.
 
 **Screen Sharing Rubyfier.app** creates **Screen Sharing Rubyfied.app** from the
 Apple viewer already installed on the controlling Mac. It bundles optool, a
@@ -16,18 +16,17 @@ See [installation](docs/INSTALL.md) and [patcher details](docs/RUBIED_PATCHER.md
 
 The current payload accepts the tested Screen Sharing executable from macOS
 26.7.1 (25G241), on Apple silicon. Other native builds fail the compatibility check.
-Local tests cover the native sign-in/reconnect UI, TCP and three bidirectional
-connected-loopback media channels through Apple's socket-dictionary handoff.
-Standard mode worked in the user's r3 test; High Performance showed a grey
-screen. R4 replaces the shared wildcard receiver with distinct connected native
-sockets and adds native first-frame/feedback diagnostics for the next live test.
-**Live High Performance video, input, performance and restricted-policy operation
-remain unverified.** Synthetic transport counters do not establish decoded media.
+Live High Performance video, audio, and keyboard/mouse control have been verified
+on that build. Ruby owns the external network sockets; Apple's native media
+engine and image queue run inside the copied viewer. Other macOS builds and
+operation under the restricted viewer's network rules remain unverified.
+Allow Local Network access when macOS asks. See the installation guide if a
+previously denied permission prevents the connection.
 
 The app retains private diagnostics with one-click collection and ZIP export.
 The original icon and DMG layout are preserved. Build the local patcher with
 `bash Packaging/build-app.sh`; versioned DMG packaging uses
-`SSP_VERSION=0.1.0-alpha.6 bash Packaging/build-app-dmg.sh`. These commands do not
+`SSP_VERSION=1.0.0 bash Packaging/build-app-dmg.sh`. These commands do not
 publish a release. Existing tags and published assets must never be replaced.
 
 On the **viewer Mac**, using Swift 6.2+ / Xcode 26.2, automatically find the allowed

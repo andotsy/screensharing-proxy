@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Experimental bidirectional relay on the existing 127.0.0.1 address. Apple
+# Bidirectional relay on the existing 127.0.0.1 address. Apple
 # connects TCP to this address; local media must present that same peer tuple.
 require_relative 'relay'
 

@@ -2,6 +2,42 @@
 
 ## Current resume point — Screen Sharing Rubyfier, 2026-10-18
 
+### Version 1.0.0: working live High Performance
+
+The user enabled direct debugging on the development Mac and confirmed the
+working session has moving video, keyboard/mouse control, and audio. The owned
+viewer used only connected loopback TCP/UDP; Ruby owns the external sockets.
+Evidence remains outside the checkout in `work/rubyfier-live-debug-3`.
+
+Two native blockers were isolated: avconferenced rejects the copied app's media
+configuration at its authorization check, and AVCRemoteVideoClient still looks
+up video slots in that separate service after media is moved in-process.
+Rubyfied now selects AVC's in-process video/audio path and supplies a local video
+client using the native VCImageQueue slot and decoded first-frame observation.
+No custom codec, protocol decoder, media-key logging or privileged service change.
+
+Schema 5 / transportRevision 6 adds nativeVideo image-queue observations and
+marks highPerformanceSession videoDecoded only after a native decoded frame.
+Stopped-child retry recovery preserves the last three attempts. LaunchServices
+was also observed returning hostUnreachable while SSH launch worked; the new
+copy gets unique native executable UUIDs and a Local Network usage description.
+The freshly generated production viewer was subsequently launched through
+LaunchServices. The user confirmed video, input and audio work normally; its
+schema-5 report records videoDecoded, a native image-queue slot and both streams
+started. Evidence is `work/rubyfier-1.0.0-validation/production-live.json`.
+
+Validation passed: 78 Swift tests, warnings-as-errors release build, 24 loopback
+tests (one optional helper skipped in the normal run), real native in-process
+stream/feedback/image-queue/client-cleanup fixture, stopped-relay recovery,
+synthetic native sign-in/reconnect/desktop, packaged UI/diagnostics smoke and
+strict signatures. The native copy's two architecture UUIDs differ from Apple's.
+
+The user explicitly requests commit, push and the first stable CI release,
+v1.0.0, with current experiment/alpha branding removed. Preserve old releases.
+Both Git identities remain andotsy; GitHub authorization goes through the VM.
+Restricted-policy operation, other native builds, sustained performance and the
+full reconnect/sleep matrix are not claimed by the live picture confirmation.
+
 ### Latest follow-up: connected media sockets, local r4
 
 The user confirms r3 Standard mode works. High Performance still shows a grey

@@ -5,7 +5,7 @@ destination=${1:?Supply a new output folder}
 test ! -e "$destination"
 mkdir -p "$destination/Payload/Relay"
 clang -arch arm64e -dynamiclib -fobjc-arc -Wall -Wextra -Werror \
-    -framework Foundation -framework AppKit Sources/Rubied/RubiedTransport.m \
+    -framework Foundation -framework AppKit -framework QuartzCore Sources/Rubied/RubiedTransport.m \
     -o "$destination/Payload/RubiedTransport.dylib"
 clang -arch arm64 -fobjc-arc -Wall -Wextra -Werror \
     -framework Foundation -framework AppKit Sources/Rubied/RubiedLauncher.m \

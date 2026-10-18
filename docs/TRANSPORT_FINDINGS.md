@@ -1,5 +1,12 @@
 # Transport findings
 
+**Version 1.0.0:** direct live debugging established working High Performance
+video, keyboard/mouse control, and audio on the supported development Mac.
+The copied viewer uses AVC's in-process video/audio engine and a local native
+image-queue client; Ruby owns external sockets. See [current implementation](RUBIED_PATCHER.md).
+Restricted-viewer policy remains unverified. The findings below document earlier
+stages and their then-current limitations.
+
 **Latest Rubyfier test:** the user confirms Standard mode works in r3, while
 High Performance is a grey screen with incoming Ruby UDP, native helper calls,
 and zero outgoing UDP. R4 gives AVC exclusive connected loopback media sockets

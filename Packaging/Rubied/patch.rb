@@ -60,10 +60,45 @@ def rubyfy_localized_names(resources)
   end
 end
 
+def give_native_copy_unique_uuids(path)
+  data = File.binread(path)
+  # The copied image must not retain Apple's LC_UUID. Local Network privacy
+  # uses executable UUIDs to distinguish responsible applications (TN3179).
+  raise 'Unsupported native executable container.' unless data.unpack1('N') == 0xcafebabe
+  count = data[4, 4].unpack1('N')
+  raise 'Invalid native architecture table.' unless count.between?(1, 8) && 8 + count * 20 <= data.bytesize
+  count.times do |index|
+    offset, length = data[8 + index * 20 + 8, 8].unpack('N2')
+    raise 'Invalid native architecture range.' unless offset >= 8 + count * 20 && length >= 32 && offset + length <= data.bytesize
+    raise 'Unsupported native architecture header.' unless data[offset, 4].unpack1('V') == 0xfeedfacf
+    commands, command_bytes = data[offset + 16, 8].unpack('V2')
+    position = offset + 32
+    limit = position + command_bytes
+    raise 'Invalid native load commands.' unless commands <= 4096 && limit <= offset + length
+    uuid_position = nil
+    commands.times do
+      raise 'Truncated native load command.' unless position + 8 <= limit
+      kind, size = data[position, 8].unpack('V2')
+      raise 'Invalid native load command size.' unless size >= 8 && position + size <= limit
+      if kind == 0x1b
+        raise 'Invalid native UUID command.' unless size == 24 && uuid_position.nil?
+        uuid_position = position + 8
+      end
+      position += size
+    end
+    raise 'Missing native executable UUID.' unless uuid_position && position == limit
+    uuid = Digest::SHA256.digest("Screen Sharing Rubyfied\0" + data[offset, length])[0, 16]
+    uuid.setbyte(6, (uuid.getbyte(6) & 0x0f) | 0x80)
+    uuid.setbyte(8, (uuid.getbyte(8) & 0x3f) | 0x80)
+    data[uuid_position, 16] = uuid
+  end
+  File.binwrite(path, data)
+end
+
 begin
   puts 'Checking the installed Screen Sharing app…'
   raise 'Run as your normal user, without sudo.' if Process.uid.zero?
-  raise 'This experimental patcher requires an Apple silicon Mac.' unless command('/usr/bin/uname', '-m', quiet: true).strip == 'arm64'
+  raise 'Screen Sharing Rubyfier requires an Apple silicon Mac.' unless command('/usr/bin/uname', '-m', quiet: true).strip == 'arm64'
   parent = ARGV.empty? ? __dir__ : File.expand_path(ARGV.fetch(0))
   raise 'Choose an existing writable destination folder.' unless File.directory?(parent) && File.writable?(parent)
   destination = File.join(parent, NAME)
@@ -84,6 +119,7 @@ begin
   info['CFBundleName'] = info['CFBundleDisplayName'] = 'Screen Sharing Rubyfied'
   info['CFBundleExecutable'] = 'RubiedLauncher'
   info['LSHasLocalizedDisplayName'] = true
+  info['NSLocalNetworkUsageDescription'] = 'Connect to your sharing Mac through the bundled Ruby relay.'
   %w[CFBundleURLTypes CFBundleDocumentTypes UTExportedTypeDeclarations].each { |key| info.delete(key) }
   File.write(info_path, JSON.generate(info))
   command('/usr/bin/plutil', '-convert', 'binary1', info_path)
@@ -97,6 +133,7 @@ begin
   puts 'Added the compiled transport shim and Ruby relay.'
   command(File.join(PAYLOAD, 'optool'), 'install', '-c', 'load', '-p',
           '@executable_path/../Frameworks/RubiedTransport.dylib', '-t', File.join(contents, 'MacOS/ScreenSharingNative'))
+  give_native_copy_unique_uuids(File.join(contents, 'MacOS/ScreenSharingNative'))
   puts 'Signing the new copy locally…'
   # Strip the copied executable's Apple-only entitlements. No protected app or
   # signing policy is modified. There is no developer identity impersonation.
@@ -109,7 +146,7 @@ begin
   Dir.rmdir(staging)
   puts "Created #{destination}"
   puts 'Open the copy and enter the remote Mac’s real IPv4 address. Choose High Performance when offered.'
-  puts 'Experimental: native High Performance media is not yet validated.'
+  puts 'Allow Local Network access if macOS asks when opening the new app.'
 rescue StandardError => error
   warn "Patcher: #{error.message}"
   # Only remove the private staging folder created by this invocation.

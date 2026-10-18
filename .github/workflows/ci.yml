@@ -35,6 +35,8 @@ jobs:
           swift build -Xswiftc -warnings-as-errors
           swift test -Xswiftc -warnings-as-errors
           python3 Scripts/test-loopback-relay.py
+          python3 Scripts/test-rubyfied-retry.py
+          python3 Scripts/test-rubyfied-media.py
           export SSP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)
           bash Packaging/build-app-dmg.sh
           python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose

@@ -1,7 +1,6 @@
 # Install Screen Sharing Rubyfier
 
-This repository provides a local experimental patcher for Apple silicon.
-It is not a published or CI-validated Rubyfier release. The patcher window runs
+Screen Sharing Rubyfier 1.0.0 is available for Apple silicon. The patcher window runs
 on macOS 14+, but creating Rubyfied currently requires the exact tested Screen
 Sharing executable from macOS 26.7.1 (25G241). Other native builds are refused.
 
@@ -9,12 +8,15 @@ Sharing executable from macOS 26.7.1 (25G241). Other native builds are refused.
 2. Open Rubyfier on the **controlling Mac**. Click **Create Rubyfied App…** and
    choose a writable folder. Your user Applications folder avoids admin access.
 3. Open the resulting **Screen Sharing Rubyfied.app**. If the original viewer is
-   running, the copy offers to quit it; doing so disconnects its viewer sessions.
+    running, the copy offers to quit it; doing so disconnects its viewer sessions.
+   Allow **Local Network** access when macOS asks. If access was previously
+   denied, enable Rubyfied in System Settings → Privacy & Security → Local Network.
 4. Enter the remote Mac's **real IPv4 address** in the native connection window,
    authenticate normally and choose High Performance when offered. Do not enter
    a loopback address or port 15900.
-5. Quit Rubyfied to stop its relay. Quit and reopen before switching hosts or
-   retrying after a relay failure. Rubyfier itself can be closed after creation.
+5. Quit Rubyfied to stop its relay. A new connection attempt can restart a stopped
+   relay, up to three times per minute. Quit/reopen before switching an active
+   relay to another host. Rubyfier itself can be closed after creation.
 
 The patcher bundles optool, the compiled transport library and relay scripts.
 No Xcode, command line tools, Python or gems need to be installed. It uses system
@@ -26,9 +28,10 @@ The console is scrollable, read-only and selectable, with a **Copy All** button.
 Rubyfied writes private transport counters to
 `~/Library/Logs/Screen Sharing Rubyfied/latest-session.json`.
 
-Native UI launch, a synthetic TCP handshake and three bidirectional native UDP
-channels passed local tests. **Live High Performance video, input, performance
-and operation under restricted network rules are not yet verified.**
+Live High Performance video, audio, and keyboard/mouse control have been verified
+on the supported build. Native sign-in, retry recovery and three bidirectional
+media channels also have automated coverage. Sustained performance and operation
+under the restricted viewer's network rules remain unverified.
 
 ## If macOS blocks the app
 
