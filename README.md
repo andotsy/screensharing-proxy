@@ -25,7 +25,7 @@ sockets move to Ruby. The download contains none of Apple's files.
 
 ## Install
 
-1. Download the DMG from [Releases](https://github.com/andotsy/screensharing-proxy/releases)
+1. Download the DMG from [Releases](https://github.com/andotsy/screensharing-rubyfier/releases)
    and drag **Screen Sharing Rubyfier** to Applications.
 2. Open it, click **Create Rubyfied App…** and pick a folder. `~/Applications`
    works without an admin password.
