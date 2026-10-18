@@ -38,11 +38,13 @@ sustained performance remain separate, unverified checks.
    three restarts are permitted per minute. An active relay stays pinned to its
    selected host/port, so quit/reopen before changing an active target.
 
-The patcher currently accepts the tested Screen Sharing 764.2 executable from
-macOS 26.7.1 (25G241) on Apple silicon. It checks the installed native executable
-against the exact build used
-to compile/test the payload and refuses other builds. A macOS update requires a
-new compatibility check and a new copy. It does not replace the system VNC URL
+The patcher accepts any installed Screen Sharing build on Apple silicon. It has
+only been tested with the Screen Sharing 764.2 executable from macOS 26.7.1
+(25G241); `Payload/compatibility.json` records that build's hash, and the console
+notes when the installed executable differs from it. If another build no longer
+provides the native transport methods the dylib replaces, the Rubyfied copy
+stops at launch with “unsupported native transport ABI”. A macOS update requires
+a new copy. It does not replace the system VNC URL
 handler, copy existing saved passwords, or retain Apple's private entitlements.
 
 ## Transport and evidence limits

@@ -103,9 +103,14 @@ begin
   raise 'Choose an existing writable destination folder.' unless File.directory?(parent) && File.writable?(parent)
   destination = File.join(parent, NAME)
   raise "#{NAME} already exists. Move that copy elsewhere before patching again." if File.exist?(destination)
-  compatibility = JSON.parse(File.read(File.join(PAYLOAD, 'compatibility.json')))
+  tested = JSON.parse(File.read(File.join(PAYLOAD, 'compatibility.json')))
   executable = File.join(SOURCE, 'Contents/MacOS/Screen Sharing')
-  raise 'This installed Screen Sharing build has not been checked by this patcher.' unless Digest::SHA256.file(executable).hexdigest == compatibility.fetch('nativeExecutableSHA256')
+  native_digest = Digest::SHA256.file(executable).hexdigest
+  # Any installed build may be patched; only the recorded build has been tested.
+  unless native_digest == tested.fetch('nativeExecutableSHA256')
+    puts "This Screen Sharing build differs from the tested #{tested.fetch('nativeVersion')} executable " \
+         "from macOS #{tested.fetch('testedOS')}. Continuing; this build is untested."
+  end
   command('/usr/bin/codesign', '--verify', '--strict', SOURCE)
   staging = File.join(parent, ".rubied-#{Process.pid}-#{Random.bytes(6).unpack1('H*')}")
   Dir.mkdir(staging, 0o700)
@@ -141,7 +146,7 @@ begin
   command('/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none', app)
   command('/usr/bin/codesign', '--verify', '--deep', '--strict', app)
   puts 'Verified the app signature and embedded components.'
-  raise 'The installed system executable changed during patching; please retry.' unless Digest::SHA256.file(executable).hexdigest == compatibility.fetch('nativeExecutableSHA256')
+  raise 'The installed system executable changed during patching; please retry.' unless Digest::SHA256.file(executable).hexdigest == native_digest
   File.rename(app, destination)
   Dir.rmdir(staging)
   puts "Created #{destination}"

@@ -1,7 +1,7 @@
 # Screen Sharing Rubyfier
 
 A native macOS patcher for High Performance Screen Sharing through system Ruby.
-**Version 1.0.1** supports native video, audio, and keyboard/mouse control.
+**Version 1.0.2** supports native video, audio, and keyboard/mouse control.
 
 **Screen Sharing Rubyfier.app** creates **Screen Sharing Rubyfied.app** from the
 Apple viewer already installed on the controlling Mac. It bundles optool, a
@@ -14,10 +14,11 @@ scrollable, selectable console, then open the created app and enter the sharing
 Mac's real IPv4 address. The copy offers to quit the original viewer if needed.
 See [installation](docs/INSTALL.md) and [patcher details](docs/RUBIED_PATCHER.md).
 
-The current payload accepts the tested Screen Sharing executable from macOS
-26.7.1 (25G241), on Apple silicon. Other native builds fail the compatibility check.
+The patcher runs on any installed Screen Sharing build on Apple silicon, but it
+has only been tested with the Screen Sharing executable from macOS 26.7.1
+(25G241). Other builds are patched with an untested-build note in the console.
 Live High Performance video, audio, and keyboard/mouse control have been verified
-on that build. Ruby owns the external network sockets; Apple's native media
+on that tested build. Ruby owns the external network sockets; Apple's native media
 engine and image queue run inside the copied viewer. Other macOS builds and
 operation under the restricted viewer's network rules remain unverified.
 Allow Local Network access when macOS asks. See the installation guide if a
@@ -26,7 +27,7 @@ previously denied permission prevents the connection.
 The app retains private diagnostics with one-click collection and ZIP export.
 The original icon and DMG layout are preserved. Build the local patcher with
 `bash Packaging/build-app.sh`; versioned DMG packaging uses
-`SSP_VERSION=1.0.1 bash Packaging/build-app-dmg.sh`. These commands do not
+`SSP_VERSION=1.0.2 bash Packaging/build-app-dmg.sh`. These commands do not
 publish a release. Existing tags and published assets must never be replaced.
 
 On the **viewer Mac**, using Swift 6.2+ / Xcode 26.2, automatically find the allowed

@@ -147,9 +147,9 @@ It embeds optool, the precompiled arm64e dylib, launcher and Ruby scripts. The
 optool revision and ArgumentParser license/provenance are in ThirdParty/optool.
 Local fixes validate every padding byte and avoid an out-of-bounds zero append.
 The runtime patcher uses system Ruby, plutil and codesign; no Xcode, command line
-tools, Python or gems need installation on the target. It verifies the original
-Apple executable hash against the tested 764.2 build from macOS 26.7.1 (25G241),
-creates a private staging copy, injects LC_LOAD_DYLIB, ad hoc signs and verifies,
+tools, Python or gems need installation on the target. It accepts any installed
+build, notes when the Apple executable hash differs from the tested 764.2 build
+from macOS 26.7.1 (25G241), creates a private staging copy, injects LC_LOAD_DYLIB, ad hoc signs and verifies,
 then moves the copy into a user-selected writable folder. Existing copies are
 never overwritten. Apple binaries and scratch research remain outside the repo
 and outside the distributed patcher. Developer-tool discovery was disabled for

@@ -1,8 +1,8 @@
 # Install Screen Sharing Rubyfier
 
-Screen Sharing Rubyfier 1.0.1 is available for Apple silicon. The patcher window runs
-on macOS 14+, but creating Rubyfied currently requires the exact tested Screen
-Sharing executable from macOS 26.7.1 (25G241). Other native builds are refused.
+Screen Sharing Rubyfier 1.0.2 is available for Apple silicon. The patcher window runs
+on macOS 14+ and creates Rubyfied from any installed Screen Sharing build, but it
+has only been tested with the Screen Sharing executable from macOS 26.7.1 (25G241).
 
 1. Open the DMG and drag **Screen Sharing Rubyfier.app** onto **Applications**.
 2. Open Rubyfier on the **controlling Mac**. Click **Create Rubyfied App…** and
