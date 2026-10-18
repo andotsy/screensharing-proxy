@@ -11,9 +11,8 @@ has only been tested with the Screen Sharing executable from macOS 26.7.1 (25G24
     running, the copy offers to quit it; doing so disconnects its viewer sessions.
    Allow **Local Network** access when macOS asks. If access was previously
    denied, enable Rubyfied in System Settings → Privacy & Security → Local Network.
-4. Enter the remote Mac's **real IPv4 address** in the native connection window,
-   authenticate normally and choose High Performance when offered. Do not enter
-   a loopback address or port 15900.
+4. Enter the remote Mac's **IPv4 address** in the native connection window,
+   authenticate normally and choose High Performance when offered.
 5. Quit Rubyfied to stop its relay. A new connection attempt can restart a stopped
    relay, up to three times per minute. Quit/reopen before switching an active
    relay to another host. Rubyfier itself can be closed after creation.
