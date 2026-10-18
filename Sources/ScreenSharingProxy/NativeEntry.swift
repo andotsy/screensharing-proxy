@@ -11,16 +11,10 @@ enum NativeEntry {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         if arguments.count == 2, arguments[0] == "--smoke-test" {
-            delegate.smokeDestination = URL(fileURLWithPath: arguments[1])
-            FileHandle.standardError.write(Data("Starting native smoke app\n".utf8))
+            delegate.smokeMarker = URL(fileURLWithPath: arguments[1])
         }
         if arguments.count == 2, arguments[0] == "--patch-smoke-test" {
             delegate.patchSmokeDirectory = URL(fileURLWithPath: arguments[1])
-        }
-        if arguments.count == 4, arguments[0] == "--relay-smoke-test",
-           let listener = UInt16(arguments[2]), listener >= 1024,
-           let media = UInt16(arguments[3]), (1024...65533).contains(media) {
-            delegate.relaySmoke = (URL(fileURLWithPath: arguments[1]), listener, media)
         }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
@@ -30,23 +24,15 @@ enum NativeEntry {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let saver = ArchiveSavePanel()
-    private lazy var model = DiagnosticsModel(saver: saver)
-    private let relaySaver = ArchiveSavePanel(sessionReport: true)
-    private lazy var relay = RelayModel(saver: relaySaver, launcher: relaySmoke == nil ? ScreenSharingLauncher() : SmokeViewerLauncher())
     private let rubyfier = RubyfierModel()
-    private lazy var panel = PanelController(model: model, relay: relay, rubyfier: rubyfier)
+    private lazy var panel = PanelController(rubyfier: rubyfier)
     private var quitting = false
-    var smokeDestination: URL?
+    var smokeMarker: URL?
     var patchSmokeDirectory: URL?
-    var relaySmoke: (destination: URL, listener: UInt16, media: UInt16)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if smokeDestination != nil { FileHandle.standardError.write(Data("Application finished launching\n".utf8)) }
         installMenu()
         panel.show()
-        saver.parentWindow = panel.windowForSheet
-        relaySaver.parentWindow = panel.windowForSheet
         if let patchSmokeDirectory {
             rubyfier.create(in: patchSmokeDirectory)
             Task {
@@ -76,49 +62,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
-        if let relaySmoke {
-            relay.remoteAddress = "192.0.2.1" // Route selection only; no connection or packets sent.
-            relay.listenerPort = Int(relaySmoke.listener); relay.mediaBase = Int(relaySmoke.media)
-            relay.connect()
-            Task {
-                for _ in 0..<100 {
-                    if relay.activity != .starting { break }
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-                guard panel.hasVisibleContent, relay.activity == .listening else { exit(1) }
-                await relay.stop()
-                guard !relay.isRunning, relay.report?.relayStopAcknowledged == true,
-                      let data = try? relay.report?.json() else { exit(1) }
-                do { try PrivateReportWriter.write(data, to: relaySmoke.destination, replaceExisting: false) }
-                catch { exit(1) }
-                print("Native proxy readiness, stop, report and child cleanup passed.")
-                NSApp.terminate(nil)
-            }
-            return
-        }
-        guard let smokeDestination else { return }
-        saver.smokeDestination = smokeDestination
-        model.collect()
-        FileHandle.standardError.write(Data("Collection started\n".utf8))
+        guard let smokeMarker else { return }
         Task {
-            try? await Task.sleep(for: .seconds(60))
-            FileHandle.standardError.write(Data("Native smoke watchdog: activity=\(model.activity), savePanelPresented=\(saver.presented)\n".utf8))
-            exit(1)
-        }
-        Task {
-            await model.waitForCompletion()
-            FileHandle.standardError.write(Data("Collection and save-dialog cancellation finished\n".utf8))
-            guard panel.hasVisibleContent, saver.presented, saver.smokePanelWasVisible,
-                  model.message?.hasPrefix("Not saved.") == true,
-                  model.collection?.report.platform == "macOS",
-                  model.collection?.report.samples.count == 10, let archive = model.archiveData else {
-                FileHandle.standardError.write(Data("Native collection/save-panel check failed.\n".utf8)); exit(1)
+            try? await Task.sleep(for: .milliseconds(300))
+            // The packaged-guide check opens the app through LaunchServices and
+            // only sees this marker, so write it after the window is usable.
+            guard panel.hasVisibleContent, panel.hasUsableConsoleAndMinimumSize, rubyfier.payloadAvailable,
+                  (try? Data("Screen Sharing Rubyfier \(ProxyBuild.version) window ready\n".utf8)
+                    .write(to: smokeMarker, options: .withoutOverwriting)) != nil else {
+                FileHandle.standardError.write(Data("Native window smoke check failed.\n".utf8)); exit(1)
             }
-            // Test the shared writer directly: AppKit requires a real user or
-            // accessibility-driven UI test to confirm a save, not panel.ok(_:).
-            do { try PrivateReportWriter.write(archive, to: smokeDestination, replaceExisting: false) }
-            catch { FileHandle.standardError.write(Data("Native ZIP write failed.\n".utf8)); exit(1) }
-            print("Native collection, save dialog cancellation and ZIP write passed.")
+            print("Native window, console, minimum size and bundled patcher passed.")
             NSApp.terminate(nil)
         }
     }
@@ -128,10 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitting { return .terminateLater }
-        guard model.isBusy || relay.isRunning || relay.saving || rubyfier.isBusy else { return .terminateNow }
+        guard rubyfier.isBusy else { return .terminateNow }
         quitting = true
         rubyfier.cancel()
-        Task { await rubyfier.waitForCompletion(); await relay.stop(); await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
+        Task { await rubyfier.waitForCompletion(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
     private func installMenu() {

@@ -20,7 +20,7 @@ import uuid
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('--ruby', default='/usr/bin/ruby')
-PARSER.add_argument('--script', type=Path, default=Path(__file__).resolve().parents[1] / 'Sources/ProxyCore/Resources/relay.rb')
+PARSER.add_argument('--script', type=Path, default=Path(__file__).resolve().parents[1] / 'Sources/Rubied/Relay/relay.rb')
 PARSER.add_argument('--portable', action='store_true')
 OPTIONS, REST = PARSER.parse_known_args()
 

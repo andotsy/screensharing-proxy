@@ -3,14 +3,9 @@ import ProxyAppSupport
 import SwiftUI
 
 final class PanelController: NSObject, NSWindowDelegate {
-    private let model: DiagnosticsModel
-    private let relay: RelayModel
     private let rubyfier: RubyfierModel
     private var window: NSWindow?
-    var windowForSheet: NSWindow? { window }
-    init(model: DiagnosticsModel, relay: RelayModel, rubyfier: RubyfierModel) {
-        self.model = model; self.relay = relay; self.rubyfier = rubyfier
-    }
+    init(rubyfier: RubyfierModel) { self.rubyfier = rubyfier }
     var hasVisibleContent: Bool {
         window?.isVisible == true && (window?.contentView?.bounds.width ?? 0) >= 560
     }
@@ -28,7 +23,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
     func show() {
         if window == nil {
-            let content = NSHostingView(rootView: MainPanel(model: model, relay: relay, rubyfier: rubyfier))
+            let content = NSHostingView(rootView: MainPanel(rubyfier: rubyfier))
             // AppKit owns these constraints. Hosting's automatic sizing otherwise
             // resets the minimum after asynchronous SwiftUI layout updates.
             content.sizingOptions = []

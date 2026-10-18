@@ -128,7 +128,7 @@ def main():
             'CFBundleIdentifier': 'com.andotsy.rubyfied-retry-fixture',
             'CFBundleExecutable': binary.name, 'CFBundlePackageType': 'APPL'}))
         for name in ('relay.rb', 'loopback-relay.rb'):
-            shutil.copyfile(ROOT / 'Sources/ProxyCore/Resources' / name, resources / name)
+            shutil.copyfile(ROOT / 'Sources/Rubied/Relay' / name, resources / name)
         source = (ROOT / 'Sources/Rubied/RubiedTransport.m').read_text()
         directory = '[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Logs/Screen Sharing Rubyfied"]'
         assert source.count(directory) == 1

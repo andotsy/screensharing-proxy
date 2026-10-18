@@ -23,9 +23,7 @@ No Xcode, command line tools, Python or gems need to be installed. It uses syste
 Ruby and codesign, modifies only the new app copy, and never overwrites an
 existing copy. No interface, route, firewall or sharing-service setting changes.
 
-The console is scrollable, read-only and selectable, with a **Copy All** button.
-**Diagnostics** retains the one-click collection and automatic ZIP save dialog.
-Rubyfied writes private transport counters to
+Rubyfied keeps a private log of transport counters in
 `~/Library/Logs/Screen Sharing Rubyfied/latest-session.json`.
 
 Live High Performance video, audio, and keyboard/mouse control have been verified
@@ -55,6 +53,4 @@ test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/In
 Use the accompanying SHA256SUMS to check the archive before opening it:
 `shasum -a 256 -c SHA256SUMS` with both files in the same folder.
 
-The CLI is included at
-`/Applications/Screen Sharing Rubyfier.app/Contents/MacOS/screensharing-proxy-diagnose`.
-See [diagnostics](DIAGNOSTICS.md) and the [patcher notes](RUBIED_PATCHER.md).
+See the [patcher notes](RUBIED_PATCHER.md) for how the copy is made.

@@ -21,7 +21,7 @@ PARSER = argparse.ArgumentParser()
 PARSER.add_argument('--native-helper', type=Path)
 OPTIONS, REST = PARSER.parse_known_args()
 SUPPORT = runpy.run_path(str(Path(__file__).with_name('test-ruby-relay.py')))
-SUPPORT['OPTIONS'].script = Path(__file__).resolve().parents[1] / 'Sources/ProxyCore/Resources/loopback-relay.rb'
+SUPPORT['OPTIONS'].script = Path(__file__).resolve().parents[1] / 'Sources/Rubied/Relay/loopback-relay.rb'
 Child = SUPPORT['Child']
 
 

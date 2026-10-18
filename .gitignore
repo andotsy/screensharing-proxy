@@ -2,8 +2,3 @@
 .swiftpm/
 .DS_Store
 dist/
-ScreenSharingProxy.app/
-Diagnostics/
-/*-report.json
-*.pcap
-*.pcapng

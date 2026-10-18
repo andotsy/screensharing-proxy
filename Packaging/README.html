@@ -31,11 +31,9 @@ three times per minute. Quit and reopen before changing an active host.</li></ol
 <p>The patcher bundles optool, the compiled library and relay scripts. No Xcode,
 command line tools, Python or gems need to be installed. An existing Rubyfied app
 is never overwritten. No network or sharing-service settings are changed.</p>
-<p>Rubyfier can be closed after creation. Its console is scrollable, read-only and
-selectable; <strong>Copy All</strong> copies the log.</p>
+<p>You can quit Rubyfier once the copy is created. <strong>Copy All</strong> copies its log.</p>
 <h2>Reports and validation</h2>
-<p><strong>Diagnostics → Collect Diagnostics</strong> collects a ZIP and opens a save dialog.
-Rubyfied writes private transport counters to
+<p>Rubyfied keeps a private log of transport counters in
 <code>~/Library/Logs/Screen Sharing Rubyfied/latest-session.json</code>.</p>
 <p>Live High Performance video, audio, and keyboard/mouse control have been verified.
 Automated tests cover native sign-in, retry recovery and three bidirectional media
@@ -59,9 +57,8 @@ test &quot;$(/usr/libexec/PlistBuddy -c &#x27;Print :CFBundleIdentifier&#x27; &q
 /usr/bin/open &quot;$app&quot;
 )</code></pre>
 <h2>Privacy and integrity</h2>
-<p>Shared diagnostics redact private addresses and non-system paths by default.
-Our reports exclude credentials, media keys and packet contents. Review reports
-before sharing them. The accompanying SHA256SUMS checks download integrity.</p>
+<p>Rubyfied's log excludes credentials, media keys, packet contents and host
+addresses. The accompanying SHA256SUMS checks download integrity.</p>
 <script>
 document.getElementById('copy').addEventListener('click',async()=>{
  const code=document.getElementById('launch-command');

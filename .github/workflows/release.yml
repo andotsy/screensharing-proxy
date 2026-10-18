@@ -58,7 +58,6 @@ jobs:
           python3 Scripts/test-rubyfied-retry.py
           python3 Scripts/test-rubyfied-media.py
           bash Packaging/build-app-dmg.sh
-          python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
 
       - name: Verify mounted contents and offline guide
         run: |
@@ -68,8 +67,6 @@ jobs:
           trap 'hdiutil detach "$mount_path"' EXIT
           app="$mount_path/Screen Sharing Rubyfier.app"
           python3 Scripts/smoke-app.py "$app"
-          test "$("$app/Contents/MacOS/screensharing-proxy-diagnose" --version)" = "screensharing-proxy-diagnose $SSP_VERSION"
-          codesign --verify --strict "$app/Contents/MacOS/screensharing-proxy-diagnose"
           test "$(lipo -archs "$app/Contents/MacOS/ScreenSharingProxy")" = arm64
           test -L "$mount_path/Applications"
           test "$(readlink "$mount_path/Applications")" = /Applications

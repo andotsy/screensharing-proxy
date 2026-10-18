@@ -18,7 +18,7 @@ module ScreenSharingRelay
       raise Failure.new('invalidConfiguration') if @remote.start_with?('127.')
       @remote_port = port(config.fetch('remoteControlPort', 5900))
       @base = port(config.fetch('mediaBase', 5900), 65_533)
-      # A separate peer base is for local fixtures only, as in incoming-relay.rb.
+      # A separate peer base is for local fixtures only.
       @remote_base = port(config.fetch('remoteMediaBase', @base), 65_533)
       # Rubyfied can move the native receiver to its own loopback-only ports.
       # The standalone, unpatched-viewer experiment keeps its original layout.

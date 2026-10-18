@@ -39,7 +39,6 @@ jobs:
           python3 Scripts/test-rubyfied-media.py
           export SSP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)
           bash Packaging/build-app-dmg.sh
-          python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
           python3 Scripts/smoke-app.py ".build/native-bundle/Screen Sharing Rubyfier.app"
           mount_path=$(mktemp -d "$RUNNER_TEMP/ssp-ci-mount.XXXXXX")
           hdiutil attach "dist/ScreenSharingRubyfier-v$SSP_VERSION-macOS-arm64.dmg" -readonly -nobrowse -mountpoint "$mount_path"

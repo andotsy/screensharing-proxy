@@ -1,8 +1,6 @@
 """Run the exact offline guide command on a disposable macOS copy."""
 from html.parser import HTMLParser
 from pathlib import Path
-import json
-import zipfile
 import plistlib
 import shlex
 import subprocess
@@ -47,21 +45,19 @@ def main():
         app.parent.mkdir()
         subprocess.run(["/usr/bin/ditto", str(volume / app.name), str(app)], check=True)
         subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
-        report = root / "native-report.zip"
+        marker = root / "window-ready.txt"
         command = snippet.replace(app_literal, shlex.quote(str(app)))
         # Keep the guide's launch command, with a test-only argument so the
-        # launched app tests collection, save-dialog cancellation and ZIP writing,
-        # then quits. AppKit disallows programmatic Save-button confirmation.
+        # launched app checks its window and bundled patcher, writes a marker
+        # and quits.
         command = command.replace('/usr/bin/open "$app"',
-            '/usr/bin/open -W "$app" --args --smoke-test ' + shlex.quote(str(report)))
+            '/usr/bin/open -W "$app" --args --smoke-test ' + shlex.quote(str(marker)))
         script = root / "guide.zsh"
         script.write_text(command + "\n")
         subprocess.run(["/bin/zsh", "-n", str(script)], check=True)
         result = subprocess.run(["/bin/zsh", str(script)], capture_output=True, text=True, timeout=90)
         assert result.returncode == 0, result.stderr
-        with zipfile.ZipFile(report) as archive:
-            assert archive.testzip() is None
-            assert json.loads(archive.read("diagnostics.json"))["platform"] == "macOS"
+        assert marker.read_text().endswith(" window ready\n")
         subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
         quarantine = subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(app)], capture_output=True)
         assert quarantine.returncode != 0
@@ -84,7 +80,7 @@ if __name__ == "__main__":
         main()
     except Exception:
         # Surface the exact failing check through GitHub's Checks API as well
-        # as the job log. No collected diagnostic report is included here.
+        # as the job log.
         detail = traceback.format_exc().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
         print("::error title=Offline guide verification::" + detail, flush=True)
         raise
