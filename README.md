@@ -58,7 +58,7 @@ You need an Apple silicon Mac with Xcode 26.
 
 ```sh
 bash Packaging/build-app.sh                         # app in .build/native-bundle/
-SSP_VERSION=1.0.2 bash Packaging/build-app-dmg.sh   # DMG in dist/
+SSP_VERSION=1.1.0 bash Packaging/build-app-dmg.sh   # DMG in dist/
 ```
 
 Tests:
