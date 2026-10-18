@@ -1,7 +1,7 @@
 # Screen Sharing Rubyfier
 
 A native macOS patcher for High Performance Screen Sharing through system Ruby.
-**Version 1.0.0** supports native video, audio, and keyboard/mouse control.
+**Version 1.0.1** supports native video, audio, and keyboard/mouse control.
 
 **Screen Sharing Rubyfier.app** creates **Screen Sharing Rubyfied.app** from the
 Apple viewer already installed on the controlling Mac. It bundles optool, a
@@ -26,7 +26,7 @@ previously denied permission prevents the connection.
 The app retains private diagnostics with one-click collection and ZIP export.
 The original icon and DMG layout are preserved. Build the local patcher with
 `bash Packaging/build-app.sh`; versioned DMG packaging uses
-`SSP_VERSION=1.0.0 bash Packaging/build-app-dmg.sh`. These commands do not
+`SSP_VERSION=1.0.1 bash Packaging/build-app-dmg.sh`. These commands do not
 publish a release. Existing tags and published assets must never be replaced.
 
 On the **viewer Mac**, using Swift 6.2+ / Xcode 26.2, automatically find the allowed

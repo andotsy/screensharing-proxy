@@ -36,11 +36,16 @@ struct RubyfierPane: View {
                     Label("Console", systemImage: "terminal")
                     Spacer()
                     Button(action: copyConsole) {
-                        HStack(spacing: 5) {
-                            Text("Copy All")
-                            Image(systemName: "checkmark").opacity(copied ? 1 : 0)
-                                .accessibilityHidden(true)
-                        }
+                        Text("Copy All")
+                            .overlay(alignment: .trailing) {
+                                // Use the existing trailing gutter for feedback,
+                                // keeping the label and button bounds stationary.
+                                Image(systemName: "checkmark")
+                                    .offset(x: 14)
+                                    .opacity(copied ? 1 : 0)
+                                    .accessibilityHidden(true)
+                                    .allowsHitTesting(false)
+                            }
                     }
                     .disabled(model.consoleText.isEmpty)
                     .buttonStyle(ConsoleCopyButtonStyle())
