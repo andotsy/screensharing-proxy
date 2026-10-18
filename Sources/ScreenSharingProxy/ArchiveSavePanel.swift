@@ -4,6 +4,8 @@ import ProxyCore
 import UniformTypeIdentifiers
 
 final class ArchiveSavePanel: NSObject, DiagnosticArchiveSaving {
+    private let sessionReport: Bool
+    init(sessionReport: Bool = false) { self.sessionReport = sessionReport; super.init() }
     weak var parentWindow: NSWindow?
     var smokeDestination: URL?
     private(set) var presented = false
@@ -15,10 +17,10 @@ final class ArchiveSavePanel: NSObject, DiagnosticArchiveSaving {
     func save(_ data: Data) async -> DiagnosticSaveResult {
         smokeLog("Save requested")
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.zip]
+        panel.allowedContentTypes = sessionReport ? [.json] : [.zip]
         panel.canCreateDirectories = true
-        panel.title = "Save Diagnostics"
-        panel.nameFieldStringValue = "ScreenSharingProxy-Diagnostics.zip"
+        panel.title = sessionReport ? "Save Session Report" : "Save Diagnostics"
+        panel.nameFieldStringValue = sessionReport ? "ScreenSharingProxy-Session.json" : "ScreenSharingProxy-Diagnostics.zip"
         if let smokeDestination {
             panel.directoryURL = smokeDestination.deletingLastPathComponent()
             panel.nameFieldStringValue = smokeDestination.lastPathComponent

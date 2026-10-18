@@ -9,8 +9,8 @@
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>5</string>
-    <key>SSPReleaseVersion</key><string>0.1.0-alpha.5</string>
+    <key>CFBundleVersion</key><string>6</string>
+    <key>SSPReleaseVersion</key><string>0.1.0-alpha.6</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>

@@ -24,10 +24,14 @@ public enum BackendEvent: Codable, Sendable, Equatable {
     case traffic(receivedBytes: UInt64, sentBytes: UInt64)
     case media(receivedDatagrams: UInt64, sentDatagrams: UInt64, droppedDatagrams: UInt64)
     case control(nativeAccepted: Bool, remoteConnected: Bool, nativeReadClosed: Bool, remoteReadClosed: Bool)
+    case controlConnections(accepted: UInt64, connected: UInt64, completed: UInt64)
+    case connectionClosed(reason: TCPClosureReason, discardedBytes: UInt64)
     case failureContext(operation: BackendOperation, systemError: BackendSystemError?)
     case stopped
     case failed(code: BackendFailureCode)
 }
+
+public enum TCPClosureReason: String, Codable, Sendable { case endOfStream, peerClosed, peerReset }
 
 /// Fixed labels only; no socket addresses, exception strings or payloads.
 public enum BackendOperation: String, Codable, Sendable {
@@ -163,7 +167,7 @@ public struct SessionLifecycle: Sendable {
             guard [.starting, .listening, .relaying].contains(phase) else { throw TransitionError.invalidTransition }
             failure = code
             phase = .stopping // Keep the slot occupied until actual process exit.
-        case .control, .failureContext:
+        case .control, .controlConnections, .connectionClosed, .failureContext:
             break // Experiment evidence does not promote native-session validity.
         }
     }

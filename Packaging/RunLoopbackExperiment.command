@@ -6,5 +6,5 @@ printf 'Run on the controlling Mac. Disconnect its existing Screen Sharing sessi
 read -r -p 'Screen-sharing host IPv4 address: ' remote_address
 report="$PWD/loopback-$(date -u +%Y%m%dT%H%M%SZ).json"
 printf 'After Relay ready, Screen Sharing opens automatically. Choose High Performance when offered.\n'
-printf 'This attempt ends after 10 minutes or TCP close. Ctrl-C stops early and saves a report.\n'
+printf 'Login reconnections stay in this attempt. Ctrl-C saves the report; limits are 10 minutes total or 2 minutes waiting for TCP.\n'
 exec ./screensharing-proxy-experiment loopback --remote "$remote_address" --output "$report" --open-viewer

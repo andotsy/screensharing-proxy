@@ -2,7 +2,6 @@ import AppKit
 import Darwin
 import ProxyAppSupport
 import ProxyCore
-import ServiceManagement
 
 @main
 enum NativeEntry {
@@ -15,6 +14,11 @@ enum NativeEntry {
             delegate.smokeDestination = URL(fileURLWithPath: arguments[1])
             FileHandle.standardError.write(Data("Starting native smoke app\n".utf8))
         }
+        if arguments.count == 4, arguments[0] == "--relay-smoke-test",
+           let listener = UInt16(arguments[2]), listener >= 1024,
+           let media = UInt16(arguments[3]), (1024...65533).contains(media) {
+            delegate.relaySmoke = (URL(fileURLWithPath: arguments[1]), listener, media)
+        }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
         app.run()
@@ -25,20 +29,38 @@ enum NativeEntry {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let saver = ArchiveSavePanel()
     private lazy var model = DiagnosticsModel(saver: saver)
-    private lazy var panel = PanelController(model: model)
+    private let relaySaver = ArchiveSavePanel(sessionReport: true)
+    private lazy var relay = RelayModel(saver: relaySaver, launcher: relaySmoke == nil ? ScreenSharingLauncher() : SmokeViewerLauncher())
+    private lazy var panel = PanelController(model: model, relay: relay)
     private var quitting = false
     var smokeDestination: URL?
+    var relaySmoke: (destination: URL, listener: UInt16, media: UInt16)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if smokeDestination != nil { FileHandle.standardError.write(Data("Application finished launching\n".utf8)) }
         installMenu()
         panel.show()
         saver.parentWindow = panel.windowForSheet
-        // Earlier diagnostic alphas exposed this setting. Remove this app's old
-        // registration when upgrading; diagnostics now run only on demand.
-        if SMAppService.mainApp.status == .enabled || SMAppService.mainApp.status == .requiresApproval {
-            do { try SMAppService.mainApp.unregister() }
-            catch { model.showError("Remove Screen Sharing Proxy from Login Items in System Settings to stop the old startup setting.") }
+        relaySaver.parentWindow = panel.windowForSheet
+        if let relaySmoke {
+            relay.remoteAddress = "192.0.2.1" // Route selection only; no connection or packets sent.
+            relay.listenerPort = Int(relaySmoke.listener); relay.mediaBase = Int(relaySmoke.media)
+            relay.connect()
+            Task {
+                for _ in 0..<100 {
+                    if relay.activity != .starting { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                guard panel.hasVisibleContent, relay.activity == .listening else { exit(1) }
+                await relay.stop()
+                guard !relay.isRunning, relay.report?.relayStopAcknowledged == true,
+                      let data = try? relay.report?.json() else { exit(1) }
+                do { try PrivateReportWriter.write(data, to: relaySmoke.destination, replaceExisting: false) }
+                catch { exit(1) }
+                print("Native proxy readiness, stop, report and child cleanup passed.")
+                NSApp.terminate(nil)
+            }
+            return
         }
         guard let smokeDestination else { return }
         saver.smokeDestination = smokeDestination
@@ -72,9 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitting { return .terminateLater }
-        guard model.isBusy else { return .terminateNow }
+        guard model.isBusy || relay.isRunning || relay.saving else { return .terminateNow }
         quitting = true
-        Task { await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
+        Task { await relay.stop(); await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
     private func installMenu() {

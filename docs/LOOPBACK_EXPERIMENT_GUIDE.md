@@ -25,15 +25,24 @@ selected another source on the test Mac.
 
 `Run.command` now opens Apple's Screen Sharing URL handler after Relay ready.
 The native launch path reaches a local listener without editing a saved entry.
-This fixes the over-strict route guard and avoids reliance on the connection
-editor; full native High Performance operation remains unverified.
+After a full quit of the viewer, the next live attempt reached TCP but ended
+after 17 bytes toward the viewer and 12 toward the host. Local testing with the
+actual Apple viewer exposed another defect: it closes an initial discovery TCP
+connection, shows the login prompt, then reconnects to sign in. The relay used
+to close its listener on the first accept and exit when that first pair closed.
+
+This revision keeps the listener and media reservations through sequential TCP
+connections. A native test now reaches a synthetic desktop through both
+connections using the real Ruby relay. It tests the login connection lifecycle;
+full native High Performance operation remains unverified.
 
 ## One attempt on the controlling Mac
 
 Nothing needs installing on the screen-sharing host. Use an Apple silicon Mac
 and its built-in system Ruby; Python is not needed.
 
-1. Disconnect Screen Sharing on the **controlling** Mac and unzip this package.
+1. Fully quit Screen Sharing with **Command-Q** on the **controlling** Mac, then
+   unzip this package into a new folder.
 2. Open `Run.command`. Enter the **host's IPv4 address** at the Terminal prompt.
 3. Wait for **Relay ready**. Screen Sharing opens automatically to
    **127.0.0.1:15900**. Authenticate with the **remote Mac's account**, and choose
@@ -44,9 +53,10 @@ and its built-in system Ruby; Python is not needed.
    the exact error and whether it appeared before or after entering credentials.
    The JSON records transport progress without credentials or payloads. Stop
    with Ctrl-C if still running; one failed attempt is sufficient for diagnosis.
-5. The attempt ends on TCP close, Ctrl-C or the ten-minute limit. Its
-   `loopback-*.json` report appears beside `Run.command`. Run `Run.command` again
-   **before** a new connection attempt; do not reconnect through a stopped relay.
+5. Press **Ctrl-C** in Terminal to save `loopback-*.json` beside `Run.command`.
+   The relay stays running through login reconnections. It also stops at the
+   ten-minute limit, or after two minutes waiting for a TCP connection. Restart
+   `Run.command` before connecting again if the relay has already stopped.
 
 If High Performance is unavailable for the localhost connection, that is a
 failed negotiation test; Standard mode is not a successful result. After testing,
@@ -75,9 +85,14 @@ paths, credentials and payloads. `forwardedToNativeDatagrams` and
 also include TCP. Neither indicates accepted SRTP or decoded video. The report's
 `highPerformanceSession` remains `unverified`; record your observations separately.
 
-`nativeTCPAccepted` and `remoteTCPConnected` describe sockets, not authentication.
-`nativeTCPReadClosed` and `remoteTCPReadClosed` record read EOF, not why a peer
-closed. `failureOperation` and `failureSystemError` contain finite labels, not
+Schema 5 retains `nativeTCPConnectionCount`, `remoteTCPConnectionCount` and
+`completedTCPConnectionCount`, cumulative across this attempt. Completed counts retired pairs, including reset/closed peers, not successful
+sessions. `lastTCPClosure` distinguishes EOF, peer closure and reset;
+`discardedTCPBytes` counts queued bytes abandoned after a peer closes.
+The four TCP booleans describe the current pair, or the last completed pair
+while waiting for another connection. They describe sockets, not authentication;
+read EOF does not explain why a peer closed.
+`failureOperation` and `failureSystemError` contain finite labels, not
 raw exception text. Older reports may contain `routeChanged` / `routeCheck`;
 this revision no longer compares fresh route selections. A normal `relayExited`
 result can still accompany a failed

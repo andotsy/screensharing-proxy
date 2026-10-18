@@ -69,6 +69,7 @@ def main():
         assert data["highPerformanceRelay"] == "notVerified"
         assert stat.S_IMODE(report.stat().st_mode) == 0o600
 
+    subprocess.run([sys.executable, str(Path(__file__).with_name("smoke-relay-app.py")), str(bundle)], check=True)
     print("Native window, save-dialog cancellation, ZIP writer, resources and signature passed.")
 
 

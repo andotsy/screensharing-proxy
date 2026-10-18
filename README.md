@@ -3,31 +3,30 @@
 A native macOS project investigating a viewer-side relay for Apple's High
 Performance Screen Sharing.
 
-**Native app prerelease: `v0.1.0-alpha.5`.** Its macOS arm64 DMG contains
-`ScreenSharingProxy.app`, a proxy icon, an Applications shortcut and an
-offline installation guide. See [installation](docs/INSTALL.md) and
-[release notes](docs/releases/0.1.0-alpha.5.md).
+**Native relay app prerelease: `v0.1.0-alpha.6`.** The Apple silicon DMG contains
+`ScreenSharingProxy.app`, the user-supplied icon, Applications shortcut and an
+offline guide. See [installation](docs/INSTALL.md) and [release notes](docs/releases/0.1.0-alpha.6.md).
 
-The app opens on its **Diagnostics** tab. **Proxy** and **Settings** are visible
-but grayed out until those features are available. One button collects diagnostics
-and opens a Save dialog for a redacted ZIP. Collection includes exact `proxyd`
-discovery and separate Python/Ruby firewall candidates.
-**Traffic forwarding remains experimental.** System Ruby is the selected
-candidate; full native High Performance media and control remain unproven.
-The incoming-only experiment failed on a previously working setup: gray video
-and stream disconnection despite received traffic, with host RTCP timeouts.
-The new [loopback experiment](docs/LOOPBACK_EXPERIMENT_GUIDE.md) forwards TCP and
-both UDP directions while preserving the viewer's expected local peer. It runs on
-the **controlling Mac**, not the Mac whose screen is shared. It does not enable
-the diagnostic app's disabled features. Its first live tests also failed after
-the login prompt, before reported UDP traffic. The current revision fixes a
-shutdown-reporting race and adds precise failure context; connection setup is
-still unresolved.
+On the **controlling Mac**, open **Proxy**, enter the remote IPv4 address and
+click **Connect**. The app starts the system Ruby relay, then opens Apple's
+Screen Sharing for authentication and mode selection. **Stop Relay** and quitting
+the app clean up the owned process. **Settings** contains optional port settings;
+**Diagnostics** retains one-click collection and private ZIP export. Session
+transport counters can be saved as JSON. The app has no ten-minute experiment cap.
+
+**Performance remains experimental.** A user selected High Performance and
+confirmed video plus keyboard/mouse, but that attempt's counters show TCP-only
+forwarding with no UDP. The app reports observed transport without claiming
+verified high-performance media. Direct sharing may still be faster; operation
+under the restricted viewer's rules, audio and sustained stability remain unverified.
+The relay does not decode media, handle credentials or change network/display settings.
+See [the current handoff](docs/HANDOFF.md) for evidence and the [loopback guide](docs/LOOPBACK_EXPERIMENT_GUIDE.md)
+for the separate bounded command-line experiment.
 
 Implemented:
 
-- Native app shell with a usable Diagnostics tab and disabled Proxy/Settings tabs.
-  One-button collection, automatic ZIP Save dialog, cancellation and save retry.
+- Native app with Proxy, Settings and Diagnostics tabs. Owned relay start/stop,
+  private session reports, one-button diagnostics, automatic ZIP Save dialog and save retry.
   No active Dock preference, login startup or background menu bar utility.
 - A read-only macOS diagnostic CLI: firewall entries, executable identities,
   launchd manifest candidates, and correlated TCP/UDP socket snapshots.

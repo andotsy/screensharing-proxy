@@ -1,12 +1,21 @@
 # Ruby relay experiment
 
-Current status (2026-10-18): the loopback candidate also failed live after a login
+Latest status (2026-10-18): the user confirms a live High Performance connection
+with video and keyboard/mouse through the local login-reconnect relay. Response
+is slower and colors slightly more vibrant; their causes are not measured.
+This is the previously working setup. Restricted-policy operation, audio and
+sustained stability remain unverified. See [the current handoff](HANDOFF.md).
+
+Earlier status: the loopback candidate also failed live after a login
 prompt, before any reported UDP exchange. A subsequent schema-3 attempt proved
 the periodic fresh-route comparison stopped the relay before TCP acceptance.
 The guard now checks that the pinned source remains assigned/up, preserving
 usable sockets when fresh source selection differs. `Run.command` opens the
-native viewer after ready, with a verified synthetic TCP greeting path. A prior
-supervisor clean-exit race is also fixed. No full native session is proven.
+native viewer after ready. A later native synthetic test exposed the viewer's
+discovery-then-login TCP reconnect: the loopback relay now retains its listener
+and media reservations through sequential connections. The actual viewer reaches
+a synthetic desktop through this fixed relay. A prior supervisor clean-exit race
+is also fixed. No full native High Performance session is proven.
 See [the current handoff](HANDOFF.md) and [guide](LOOPBACK_EXPERIMENT_GUIDE.md).
 
 Earlier status: the incoming-only candidate **failed live on the
@@ -19,7 +28,7 @@ only the existing loopback and routed local IPs. Apple's TCP target is now
 127.0.0.1:15900; a connected loopback receiver captures native feedback while a
 separate loopback sender injects media toward the native wildcard socket at the
 existing LAN IP. This preserves the local peer address and media port expected
-by Apple. Eight native tests cover real Ruby forwarding, actual Apple helper
+by Apple. Thirteen native tests cover real Ruby forwarding, actual Apple helper
 sockets on all three channels, exact peer tuples, TCP, cleanup and restart.
 See the [loopback guide](LOOPBACK_EXPERIMENT_GUIDE.md). Full native negotiation,
 video and control remain unproven; the app remains diagnostic-only.

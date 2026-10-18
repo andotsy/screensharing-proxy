@@ -21,6 +21,9 @@ module ScreenSharingRelay
       # A separate peer base is for local fixtures only, as in incoming-relay.rb.
       @remote_base = port(config.fetch('remoteMediaBase', @base), 65_533)
       @listen_port = port(config.fetch('listenerPort', 15_900))
+      @duration = config.fetch('maximumDurationSeconds', 1800)
+      raise Failure.new('invalidConfiguration') unless @duration.is_a?(Integer) &&
+        (@duration.zero? || (10..86_400).cover?(@duration))
       @local = @native = '127.0.0.1'
       @external = route_address
       raise Failure.new('invalidConfiguration') if @external == @remote && @base == @remote_base
@@ -50,6 +53,7 @@ module ScreenSharingRelay
 
     def prepare
       @control_enabled = true
+      @sequential_tcp = true
       @udp_routes = {}
       3.times do |offset|
         number = @base + offset
@@ -76,13 +80,13 @@ module ScreenSharingRelay
       @listener.bind(Socket.sockaddr_in(@listen_port, @local))
       @listener.listen(1)
       @source_check = ScreenSharingRelay.now + 5
-      @expires = ScreenSharingRelay.now + 1800
+      @expires = ScreenSharingRelay.now + @duration unless @duration.zero?
       @ready = true
     end
 
     def tick
       now = ScreenSharingRelay.now
-      raise Failure.new('connectionTimedOut') if now >= @expires
+      raise Failure.new('connectionTimedOut') if @expires && now >= @expires
       check_source_address(now)
       super
     end

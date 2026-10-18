@@ -18,6 +18,8 @@ public struct RubyRelayConfiguration: Encodable, Sendable {
     public var nativeAddress = "127.0.0.1"
     public var listenerPort: UInt16 = 15900
     public var externalAddress: String?
+    /// Zero keeps the app-owned relay alive until stop/parent EOF. CLI defaults remain bounded.
+    public var maximumDurationSeconds = 1800
 
     public init(sessionID: UUID, remoteAddress: String) {
         self.sessionID = sessionID; self.remoteAddress = remoteAddress
@@ -140,7 +142,7 @@ public struct RubyRelayRunner: Sendable {
                 case .ready:
                     guard !ready else { throw BackendProtocolError.invalidMessage }
                     ready = true
-                case .traffic, .media, .control:
+                case .traffic, .media, .control, .controlConnections, .connectionClosed:
                     guard ready else { throw BackendProtocolError.invalidMessage }
                 case .failureContext: break
                 case let .failed(code): failure = code

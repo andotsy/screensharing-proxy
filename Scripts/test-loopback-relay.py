@@ -10,6 +10,7 @@ import random
 import runpy
 import select
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -79,9 +80,10 @@ class LoopbackTests(unittest.TestCase):
         self.children.append(child)
         return child
 
-    def connected_pair(self):
-        child = self.start()
-        child.event('ready')
+    def connected_pair(self, child=None):
+        if child is None:
+            child = self.start()
+            child.event('ready')
         client = self.own(socket.socket())
         client.connect(('127.0.0.1', self.listener_port))
         server, peer = self.remote.accept()
@@ -149,13 +151,16 @@ class LoopbackTests(unittest.TestCase):
             self.assertEqual(bytes(received), reply)
             future.result(timeout=5)
         final = {}
-        while 'stopped' not in final:
+        while final.get('controlConnections', {}).get('completed') != 1:
             event = child.events.get(timeout=3)['event']
             self.assertNotIn('failed', event)
             final.update(event)
         self.assertEqual(final['traffic'], {'receivedBytes': len(reply) + 5, 'sentBytes': len(request)})
         self.assertEqual(final['control'], {'nativeAccepted': True, 'remoteConnected': True,
                                           'nativeReadClosed': True, 'remoteReadClosed': True})
+        self.assertIsNone(child.process.poll())
+        child.process.stdin.close()
+        child.event('stopped')
         self.assertEqual(child.process.wait(timeout=3), 0)
 
     def test_existing_owners_refuse_startup_and_partial_reservations_are_released(self):
@@ -218,6 +223,7 @@ class LoopbackTests(unittest.TestCase):
         self.assertEqual(server.recv(1), b'')
         server.shutdown(socket.SHUT_WR)
         self.assertEqual(client.recv(1), b'')
+        child.process.stdin.close()
         child.event('stopped')
         self.assertEqual(child.process.wait(timeout=3), 0)
         client.close(); server.close()
@@ -225,6 +231,77 @@ class LoopbackTests(unittest.TestCase):
         next_client.sendall(b'new attempt')
         self.assertEqual(next_server.recv(11), b'new attempt')
         self.assertIsNone(next_child.process.poll())
+
+    def test_viewer_probe_can_close_and_reconnect_for_login_in_same_relay(self):
+        child, client, server = self.connected_pair()
+        native = self.native(0)
+        # Queue the next connection while the first pair still drains. The
+        # relay must not replace the active pair or shut down its listener.
+        next_client = self.own(socket.socket())
+        next_client.connect(('127.0.0.1', self.listener_port))
+        next_client.sendall(b'login')
+        client.shutdown(socket.SHUT_WR)
+        self.assertEqual(server.recv(1), b'')
+        server.sendall(b'probe tail')
+        server.shutdown(socket.SHUT_WR)
+        self.assertEqual(client.recv(10), b'probe tail')
+        self.assertEqual(client.recv(1), b'')
+        next_server, _ = self.remote.accept()
+        self.own(next_server)
+        self.assertEqual(next_server.recv(5), b'login')
+        next_server.sendall(b'authenticated fixture')
+        self.assertEqual(next_client.recv(21), b'authenticated fixture')
+        self.media[0].sendto(b'video', (self.address, self.base))
+        self.assertEqual(native.recvfrom(100), (b'video', ('127.0.0.1', self.base)))
+        native.sendto(b'feedback', ('127.0.0.1', self.base))
+        self.assertEqual(self.media[0].recvfrom(100), (b'feedback', (self.address, self.base)))
+        next_client.shutdown(socket.SHUT_WR)
+        self.assertEqual(next_server.recv(1), b'')
+        next_server.shutdown(socket.SHUT_WR)
+        self.assertEqual(next_client.recv(1), b'')
+        final = {}
+        while final.get('controlConnections', {}).get('completed') != 2:
+            event = child.events.get(timeout=3)['event']
+            self.assertNotIn('failed', event)
+            final.update(event)
+        self.assertEqual(final['controlConnections'], {'accepted': 2, 'connected': 2, 'completed': 2})
+        self.assertEqual(final['traffic'], {'receivedBytes': 41, 'sentBytes': 13})
+        self.assertEqual(final['media'], {'receivedDatagrams': 1, 'sentDatagrams': 1, 'droppedDatagrams': 0})
+        self.assertIsNone(child.process.poll())
+
+    def test_reset_closes_only_current_pair_and_allows_reconnect(self):
+        child, client, server = self.connected_pair()
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        client.close()
+        closed = child.event('connectionClosed')
+        self.assertEqual(closed['reason'], 'peerReset')
+        self.assertIsNone(child.process.poll())
+        _, next_client, next_server = self.connected_pair(child)
+        next_client.sendall(b'reconnect')
+        self.assertEqual(next_server.recv(9), b'reconnect')
+
+    def test_app_lifetime_has_no_experiment_duration_limit(self):
+        script = SUPPORT['OPTIONS'].script
+        self.config['maximumDurationSeconds'] = 0
+        with tempfile.TemporaryDirectory(prefix='ssp-duration-fixture-') as directory:
+            wrapper = Path(directory) / 'fixture.rb'
+            wrapper.write_text(f"""
+require {json.dumps(str(script))}
+module AppLifetimeFixture
+  def prepare
+    super
+    raise 'app relay still has an experiment deadline' if @expires
+  end
+end
+ScreenSharingRelay::LoopbackRelay.prepend(AppLifetimeFixture)
+exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
+""")
+            child = Child(self.config, script=wrapper)
+            self.children.append(child)
+            child.event('ready')
+            child.process.stdin.close()
+            child.event('stopped')
+            self.assertEqual(child.process.wait(timeout=3), 0)
 
     def test_failure_identifies_outbound_bind_without_exposing_addresses(self):
         # Simulate a source disappearing after UDP reservation, without changing

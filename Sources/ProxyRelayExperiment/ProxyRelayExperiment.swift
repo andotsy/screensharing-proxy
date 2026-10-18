@@ -7,7 +7,7 @@ import Glibc
 #endif
 
 private struct ExperimentReport: Encodable {
-    let schemaVersion = 3
+    let schemaVersion = 5
     let experiment: String
     let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     let requestedDurationSeconds: Int
@@ -31,6 +31,11 @@ private struct ExperimentReport: Encodable {
     var remoteTCPConnected: Bool?
     var nativeTCPReadClosed: Bool?
     var remoteTCPReadClosed: Bool?
+    var nativeTCPConnectionCount: UInt64?
+    var remoteTCPConnectionCount: UInt64?
+    var completedTCPConnectionCount: UInt64?
+    var lastTCPClosure: TCPClosureReason?
+    var discardedTCPBytes: UInt64 = 0
     let highPerformanceSession = "unverified"
     let counterScope: String
 
@@ -42,6 +47,7 @@ private struct ExperimentReport: Encodable {
             forwardedToNativeDatagrams = 0; forwardedToRemoteDatagrams = 0
             nativeTCPAccepted = false; remoteTCPConnected = false
             nativeTCPReadClosed = false; remoteTCPReadClosed = false
+            nativeTCPConnectionCount = 0; remoteTCPConnectionCount = 0; completedTCPConnectionCount = 0
             counterScope = "Successful TCP/UDP socket submissions in each direction; datagram counts exclude TCP. Native authentication, decoding and input remain unverified."
         } else {
             experiment = "incoming-ruby-udp"
@@ -93,6 +99,11 @@ private final class Observation: @unchecked Sendable {
             case let .control(accepted, connected, nativeClosed, remoteClosed):
                 report.nativeTCPAccepted = accepted; report.remoteTCPConnected = connected
                 report.nativeTCPReadClosed = nativeClosed; report.remoteTCPReadClosed = remoteClosed
+            case let .controlConnections(accepted, connected, completed):
+                report.nativeTCPConnectionCount = accepted; report.remoteTCPConnectionCount = connected
+                report.completedTCPConnectionCount = completed
+            case let .connectionClosed(reason, discarded):
+                report.lastTCPClosure = reason; report.discardedTCPBytes += discarded
             case let .failureContext(operation, systemError):
                 report.failureOperation = operation; report.failureSystemError = systemError
             }
@@ -270,7 +281,7 @@ struct ProxyRelayExperiment {
     Ctrl-C, termination or the duration limit stops and reaps the owned Ruby child.
     Reports contain aggregate counters and OS version, without endpoints, payloads
     or credentials. Local submission does not prove delivery, decoding or feedback.
-    Loopback mode ends when TCP closes; start it again before each reconnect.
+    Loopback mode permits login reconnections; idle TCP gaps time out after two minutes.
     Record video, audio, keyboard/mouse control and reconnect results separately.
     This command is not a working-proxy release and does not enable the app's tabs.
 

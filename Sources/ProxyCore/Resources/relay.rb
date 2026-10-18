@@ -31,6 +31,7 @@ module ScreenSharingRelay
       @out = ''.b
       @session = '00000000-0000-0000-0000-000000000000'
       @received = @sent = @udp_received = @udp_sent = @udp_dropped = 0
+      @tcp_accepted = @tcp_connected = @tcp_completed = 0
       @stopping = false
       @buffers, @eof, @write_closed = {}, {}, {}
     end
@@ -206,9 +207,16 @@ module ScreenSharingRelay
       event('traffic', 'receivedBytes' => @received, 'sentBytes' => @sent)
       event('media', 'receivedDatagrams' => @udp_received, 'sentDatagrams' => @udp_sent, 'droppedDatagrams' => @udp_dropped)
       if @control_enabled
-        event('control', 'nativeAccepted' => !@client.nil?, 'remoteConnected' => @remote_connected == true,
-              'nativeReadClosed' => @eof[@client] == true, 'remoteReadClosed' => @eof[@server] == true)
+        event('control', control_status)
+        event('controlConnections', 'accepted' => @tcp_accepted, 'connected' => @tcp_connected,
+              'completed' => @tcp_completed)
       end
+    end
+
+    def control_status
+      return @last_control if !@client && @last_control
+      { 'nativeAccepted' => !@client.nil?, 'remoteConnected' => @remote_connected == true,
+        'nativeReadClosed' => @eof[@client] == true, 'remoteReadClosed' => @eof[@server] == true }
     end
 
     def failure(code, error = nil)
@@ -241,8 +249,13 @@ module ScreenSharingRelay
       return if result == :wait_readable
       @client = own(result[0])
       raise Failure.new('nativeSourceMismatch') unless @client.remote_address.ip_address == @native
-      @listener.close
-      @listener = nil
+      @tcp_accepted += 1
+      @last_control = nil
+      @remote_connected = false
+      unless @sequential_tcp
+        @listener.close
+        @listener = nil
+      end
       @server = own(Socket.new(:INET, :STREAM, 0))
       [@client, @server].each { |s| s.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1) }
       @operation = 'hostBind'
@@ -250,9 +263,33 @@ module ScreenSharingRelay
       @operation = 'hostConnect'
       @connecting = @server.connect_nonblock(Socket.sockaddr_in(@remote_port, @remote), exception: false) == :wait_writable
       @remote_connected = !@connecting
+      @tcp_connected += 1 if @remote_connected
       @connect_deadline = ScreenSharingRelay.now + 10
       @buffers = { @client => ''.b, @server => ''.b }
       @peers = { @client => @server, @server => @client }
+    end
+
+    def complete_tcp(reason = 'endOfStream')
+      @tcp_completed += 1
+      unless @sequential_tcp
+        @stopping = true
+        return
+      end
+      # Apple's viewer can close its discovery connection before reconnecting
+      # for login. Keep the listener and media reservations through that gap.
+      # Only one pair is active; release it after both half-closes have drained.
+      @last_control = control_status
+      discarded = @buffers.values.sum(&:bytesize)
+      [@client, @server].each do |socket|
+        socket.close
+        @owned.delete(socket)
+      end
+      @client = @server = nil
+      @buffers, @eof, @write_closed, @peers = {}, {}, {}, {}
+      @connecting = false
+      @accept_deadline = ScreenSharingRelay.now + 120
+      status
+      event('connectionClosed', 'reason' => reason, 'discardedBytes' => discarded)
     end
 
     def read_tcp(socket)
@@ -260,11 +297,19 @@ module ScreenSharingRelay
       destination = @peers.fetch(socket)
       room = BUFFER_LIMIT - @buffers.fetch(destination).bytesize
       return if room <= 0
-      data = socket.read_nonblock([room, 65_536].min, exception: false)
+      data = socket.read_nonblock([room, 262_144].min, exception: false)
       if data.nil?
         @eof[socket] = true
       elsif data != :wait_readable
-        @buffers[destination] << data
+        if @buffers[destination].empty?
+          @buffers[destination] = data
+        else
+          @buffers[destination] << data
+        end
+        # Forward fresh bytes in this wakeup instead of allocating another
+        # select set and waiting for the next event-loop pass. Backpressure
+        # still retains at most BUFFER_LIMIT and uses writable readiness.
+        write_tcp(destination) unless destination == @server && @connecting
       end
     end
 
@@ -274,7 +319,11 @@ module ScreenSharingRelay
       return if data.empty?
       count = socket.write_nonblock(data, exception: false)
       return unless count.is_a?(Integer)
-      @buffers[socket] = data.byteslice(count..-1) || ''.b
+      if count == data.bytesize
+        data.clear
+      else
+        @buffers[socket] = data.byteslice(count..-1)
+      end
       socket == @client ? @received += count : @sent += count
     end
 
@@ -313,9 +362,13 @@ module ScreenSharingRelay
     def tick
       @operation = 'waiting'
       now = ScreenSharingRelay.now
-      raise Failure.new('connectionTimedOut') if (@listener && now >= @accept_deadline) || (@connecting && now >= @connect_deadline)
+      if @sequential_tcp && !@server && @tcp_completed > 0 && now >= @accept_deadline
+        @stopping = true
+        return
+      end
+      raise Failure.new('connectionTimedOut') if (@listener && !@server && now >= @accept_deadline) || (@connecting && now >= @connect_deadline)
       reads = [@input] + @udp_routes.keys
-      reads << @listener if @listener
+      reads << @listener if @listener && !@server
       writes = @out.empty? ? [] : [@output]
       if @server
         @peers.each do |source, destination|
@@ -343,6 +396,7 @@ module ScreenSharingRelay
           raise SystemCallError.new('connect', error) unless error.zero?
           @connecting = false
           @remote_connected = true
+          @tcp_connected += 1
         end
         readable.each do |socket|
           next if socket == @input
@@ -366,12 +420,17 @@ module ScreenSharingRelay
             @write_closed[destination] = true
           end
         end
-        @stopping = true if @eof[@client] && @eof[@server] && @buffers.values.all?(&:empty?)
+        complete_tcp if @eof[@client] && @eof[@server] && @buffers.values.all?(&:empty?)
       end
       if now - @last_status >= 1
         status
         @last_status = now
       end
+    rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ENOTCONN => error
+      # Closing the native window may reset a stream with queued video. End
+      # only that pair; never hide startup, network, or parent-pipe errors.
+      raise unless @sequential_tcp && @server && %w[tcpRead tcpWrite tcpShutdown].include?(@operation)
+      complete_tcp(error.is_a?(Errno::ECONNRESET) ? 'peerReset' : 'peerClosed')
     end
   end
 end

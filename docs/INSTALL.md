@@ -1,23 +1,27 @@
 # Install Screen Sharing Proxy
 
-Download `ScreenSharingProxy-v0.1.0-alpha.5-macOS-arm64.dmg` from the
-[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.5).
+Download `ScreenSharingProxy-v0.1.0-alpha.6-macOS-arm64.dmg` from the
+[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.6).
 Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
 
 1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.
-2. Open **Screen Sharing Proxy** on the viewer Mac with the blocked service.
-   The **Diagnostics** tab is selected automatically.
-3. Keep the Screen Sharing connection attempt open and click **Collect Diagnostics**.
-4. When the Save dialog appears, choose where to save the ZIP, then send that ZIP
-   to the person helping you. Private addresses and paths are hidden automatically.
+2. Open the app on the **controlling/viewer Mac**. Quit its existing Screen Sharing session.
+3. In **Proxy**, enter the remote Mac's IPv4 address and click **Connect**.
+4. Sign in in Apple's Screen Sharing window and select High Performance when offered.
+5. Keep this app open while sharing. **Stop Relay** or quitting the app stops its owned Ruby process.
 
-If you cancel the Save dialog, **Save ZIP Again…** saves the completed report
-without collecting again. Closing the window quits the app.
+**Proxy, Settings and Diagnostics are available in this first relay app alpha.**
+There is no ten-minute session limit; an idle gap after TCP closes ends after two
+minutes. Settings exposes optional local/remote TCP and UDP media-base ports.
+No firewall, interface, route, display or system-service configuration is changed.
 
-**Only Diagnostics is available in this alpha. Proxy and Settings are grayed out;
-traffic forwarding is not implemented yet.**
-The app leaves firewall and display settings unchanged. It runs on demand and
-removes its own launch-at-login registration from older diagnostic alphas.
+The app shows **TCP only** when no UDP has passed through Ruby. A working screen
+with that label does not prove Apple's UDP high-performance media path, and can
+be slower than a direct connection. The restricted viewer's rules remain untested.
+
+**Save Session Report…** exports private transport counters as JSON. **Diagnostics**
+retains the one-click collection and automatic ZIP save dialog; **Save ZIP Again…**
+reuses a completed collection. Reports exclude credentials and packet contents.
 
 The app is ad hoc signed and not notarized. If macOS blocks opening the downloaded
 app, open the included Terminal shortcut and run this command after installing

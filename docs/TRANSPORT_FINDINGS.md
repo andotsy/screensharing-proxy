@@ -1,14 +1,25 @@
 # Transport findings
 
-Status on 2026-10-18: **both incoming-only and loopback live tests failed**.
+Latest status on 2026-10-18: the user reports a live connection through the
+loopback relay after the login-reconnect fix, explicitly selecting High
+Performance with keyboard and mouse working. Response is slower and colors
+slightly more vibrant; causes and successful-session counters are pending.
+This is success on the previously working setup, not a restricted-policy test.
+Audio, sustained stability and fresh reconnection remain to be checked.
+
+Earlier status: **both incoming-only and initial loopback live tests failed**.
 The loopback attempt reached a login prompt but recorded no UDP exchange. Two
 reports had `localAddressUnavailable` without an operation label. A separate
 `incompatibleProtocol` report matches a reproduced clean-exit supervisor race,
 now fixed. A subsequent schema-3 report identified `routeChanged` at `routeCheck`
 before any native TCP accept. The relay now verifies its pinned address remains
 assigned/up instead of aborting when a fresh socket selects another source.
-`Run.command` opens a new native connection after ready; its synthetic TCP
-greeting path passes on the development Mac. Full media/input remains unproven.
+`Run.command` opens a new native connection after ready. The next live attempt
+reached login but stopped after 17/12 TCP bytes. Local Apple-viewer testing
+exposed a discovery connection followed by a separate login connection. The
+loopback relay now preserves its listener and media sockets between sequential
+TCP pairs; the native viewer reaches a synthetic desktop through it. Full High
+Performance media/input remains unproven.
 See [the current handoff](HANDOFF.md).
 
 The previously working 26.7.1 pair produced gray video and a generic stream error

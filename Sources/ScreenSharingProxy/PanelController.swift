@@ -4,15 +4,16 @@ import SwiftUI
 
 final class PanelController: NSObject, NSWindowDelegate {
     private let model: DiagnosticsModel
+    private let relay: RelayModel
     private var window: NSWindow?
     var windowForSheet: NSWindow? { window }
-    init(model: DiagnosticsModel) { self.model = model }
+    init(model: DiagnosticsModel, relay: RelayModel) { self.model = model; self.relay = relay }
     var hasVisibleContent: Bool {
         window?.isVisible == true && (window?.contentView?.bounds.width ?? 0) >= 560
     }
     func show() {
         if window == nil {
-            let controller = NSHostingController(rootView: MainPanel(model: model))
+            let controller = NSHostingController(rootView: MainPanel(model: model, relay: relay))
             controller.sizingOptions = []
             let panel = NSWindow(contentViewController: controller)
             panel.title = "Screen Sharing Proxy"

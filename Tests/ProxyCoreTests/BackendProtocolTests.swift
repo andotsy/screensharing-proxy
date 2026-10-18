@@ -7,7 +7,8 @@ struct BackendProtocolTests {
     @Test func splitAndCoalescedFramesDecodeInOrder() throws {
         let id = UUID()
         let messages = [BackendEnvelope(sessionID: id, event: .ready),
-                        BackendEnvelope(sessionID: id, event: .traffic(receivedBytes: 80, sentBytes: 90))]
+                        BackendEnvelope(sessionID: id, event: .traffic(receivedBytes: 80, sentBytes: 90)),
+                        BackendEnvelope(sessionID: id, event: .controlConnections(accepted: 2, connected: 2, completed: 1))]
         var data = Data()
         for message in messages { data.append(try message.encodedLine()) }
         var decoder = BackendLineDecoder()

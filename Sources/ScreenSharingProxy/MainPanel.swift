@@ -12,12 +12,12 @@ private enum AppPane: String, CaseIterable {
         case .settings: "gearshape"
         }
     }
-    var isAvailable: Bool { self == .diagnostics }
 }
 
 struct MainPanel: View {
     @Bindable var model: DiagnosticsModel
-    @State private var pane = AppPane.diagnostics
+    @Bindable var relay: RelayModel
+    @State private var pane = AppPane.proxy
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,10 +32,9 @@ struct MainPanel: View {
                         .foregroundStyle(pane == item ? Color.accentColor : .secondary)
                         .background(pane == item ? Color.primary.opacity(0.07) : .clear,
                                     in: .rect(cornerRadius: 8))
-                        .opacity(item.isAvailable ? 1 : 0.4)
                     }
-                    .buttonStyle(.plain).disabled(!item.isAvailable)
-                    .help(item.isAvailable ? "Collect and save a diagnostic report" : "Coming in a future version")
+                    .buttonStyle(.plain)
+                    .help(item.rawValue)
                     .accessibilityAddTraits(pane == item ? [.isSelected] : [])
                 }
             }
@@ -43,13 +42,19 @@ struct MainPanel: View {
             .background(Color(nsColor: .windowBackgroundColor))
             Divider()
             ScrollView {
-                diagnostics.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    switch pane {
+                    case .proxy: ProxyPane(relay: relay)
+                    case .settings: RelaySettingsPane(relay: relay)
+                    case .diagnostics: diagnostics
+                    }
+                }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
             HStack {
                 Text("v\(ProxyBuild.version)")
                 Spacer()
-                Text("Proxy and settings are coming soon.")
+                Text("Experimental relay")
             }
             .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
         }

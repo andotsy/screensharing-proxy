@@ -2,6 +2,115 @@
 
 ## Current resume point — 2026-10-18
 
+The latest user request reauthorizes **commits, pushes, CI and an app DMG release**.
+Develop natively on this Mac, using the existing VM GitHub login only for Git/API
+operations. Release alpha 6 introduces Proxy and Settings alongside Diagnostics.
+Preserve the current icon/DMG layout and all published tags/assets.
+
+### TCP-only live report and release work
+
+The user then supplied the successful attempt's schema-4 report: 215.47 seconds,
+1,962,312,977 bytes toward the viewer, 169,672 toward the host, zero UDP submissions
+or relay drops, three accepted/connected TCP pairs and two completed pairs. The
+user confirms closing Screen Sharing themselves; the final tcpWrite/other failure
+therefore coincided with manual closure. Do not claim a spontaneous crash.
+The user selected High Performance and input worked, but the counters establish
+TCP-only forwarding for this attempt, not the intended native UDP media path.
+Performance and colors differed from direct sharing; transport selection remains
+unresolved. The app labels TCP-only evidence explicitly and does not promote
+High Performance verification.
+
+The forwarding optimization was preceded by an Instruments Time Profiler capture
+of the owned Ruby child under synthetic local traffic. Avoiding a second select
+pass and buffer copies, with bounded 256 KiB reads, improved 15-second bulk
+throughput from 2,450 to 7,109 MiB/s. A 3,000-sample tiny-message test measured
+median round-trip 58.5 -> 48.7 microseconds (p95 123.8 -> 114.6). These are local
+fixtures, not a measured improvement to live Apple sharing or a universal speed
+claim. Raw trace/fixture files remain outside the repository.
+
+The native app owns the Ruby child, launches the viewer only after ready, drains
+final events on stop/quit, saves a private session JSON, and shows actual transport
+counters. It opts out of the CLI's duration cap; parent ownership and connect/idle
+deadlines remain. A reset/closed peer retires only its TCP pair and counts discarded
+queued bytes; network/startup/parent-output errors still fail. Completed TCP counts
+now include reset/closed pairs, with an explicit connectionClosed reason.
+The CLI report schema is 5; the app session report schema is 1.
+
+Local release validation: 76 Swift tests, 15 loopback tests (including the real
+Apple UDP helper), four CLI checks, release build/signature and native packaged
+smoke checks pass. The latter starts/stops the actual embedded Ruby from the app,
+exports private session data and verifies all reserved ports are released.
+Proxy and Settings were visually inspected; Connect enables for a valid address.
+The existing branch CI runs the native relay regressions; the unchanged release
+workflow builds the DMG and exercises the updated packaged-app smoke checks.
+
+### First reported live High Performance success
+
+The user connected using the local login-reconnect package, explicitly confirms
+selecting High Performance, and confirms keyboard and mouse both work. This is
+the first reported live video-and-control success through the loopback relay on
+the previously working setup. The user reports slower response and slightly more
+vibrant colors. No schema-4 report from this successful attempt has been received
+yet; throughput, loss, latency, CPU cost and display/HDR settings are unmeasured.
+Do not describe the session as Standard or infer a color-conversion operation in
+the relay: it forwards opaque bytes/datagrams without decoding or re-encoding.
+
+Next compare the native HDR/color profile and virtual display resolution with
+the direct connection, and inspect the saved counters before changing transport
+behavior. The command still ends after ten minutes. Audio, sustained stability,
+fresh reconnection and operation on the restricted setup remain unverified.
+Keep the released app diagnostic-only; no app enablement or new publication was
+requested. The following paragraphs describe the preceding failure and repair.
+
+### Login reconnect repair
+
+The user fully quit Screen Sharing and retried the local loopback package.
+A login prompt now appeared, then a generic connection failure. The schema-3
+report shows both TCP connections established, 17 bytes toward native / 12 toward
+remote, both read sides closed, no UDP and a clean relay exit after 12.82 seconds.
+The error does not establish that sharing is disabled or authentication rejected.
+
+A local synthetic RFB server exposed a concrete lifecycle defect using the
+actual macOS 26.7.1 Apple viewer: it opens a discovery TCP connection, closes it
+before the password prompt, then opens another connection to sign in. The old
+relay closed its listener on first accept and terminated after that pair's EOF.
+This is consistent with the reported short exchange; the report contains no
+payloads and cannot prove its exact protocol contents.
+
+The uncommitted loopback fix retains the listener and UDP reservations across
+sequential TCP pairs. Only one pair is active, both half-closes must drain before
+replacement, and closed sockets/buffers are released. The next connection may
+wait in the bounded listener backlog. Initial/inter-connection waits remain
+limited to 120 seconds, with the command's ten-minute overall limit and existing
+parent EOF/signal cleanup. Other relay modes retain their previous lifecycle.
+Schema 4 adds accepted/connected/completed TCP counts; booleans describe the
+current pair or the last completed pair during the idle gap. No payload parsing
+or credential handling was added.
+
+Native validation now passed discovery, dummy login and display of a synthetic
+VNC desktop through the actual Ruby relay in one process: two accepted and
+connected pairs, then two completed pairs after closing the test window.
+The temporary profile/window and owned processes were cleaned up; original
+connections were preserved. This proves the reconnect path, not native Apple
+High Performance authentication, video, input or restricted-filter permission.
+Thirteen loopback regressions pass, including queued reconnection while the
+first pair drains, bidirectional UDP after reconnection, and existing cleanup,
+source-guard and native UDP-helper checks. All 72 Swift tests pass locally.
+The release experiment build and four packaged command checks in each mode
+also pass. The local deliverable is named
+`ScreenSharingProxy-LoopbackExperiment-local-login-reconnect-20261018-macOS-arm64.zip`,
+SHA-256 `0c220af520b46da8d461cc4595fdf18bea32fea8d9052219944c87495db7bdf5`.
+Its embedded resources/launcher/guide match the sources, ZIP integrity and
+ad-hoc signature verify, and SOURCE_COMMIT marks uncommitted changes. No commit,
+push, cloud run or published asset change was made for this fix.
+
+The prior no-window attempt had zero TCP, 6,748 aggregate drops and a clean
+Ctrl-C stop. A full quit allowed the following attempt to reach a login prompt;
+the original no-op's cause remains unestablished. Drops combine several causes
+and cannot be labelled remote video or an authentication/firewall failure.
+
+### Previous route-guard repair
+
 The subsequent schema-3 attempt failed with **`routeChanged` / `routeCheck`**
 after about 20 seconds, with ready true, no native TCP acceptance and zero
 traffic. The user edited a saved connection to 127.0.0.1:15900 and Connect did

@@ -1,5 +1,12 @@
 # High Performance Screen Sharing: services and relay requirements
 
+Latest live result (2026-10-18): after the loopback login-reconnect fix, the user
+confirms selecting High Performance and seeing video with keyboard/mouse control.
+The user reports slower response and more vibrant colors; measurements are
+pending. Restricted-policy operation, audio and sustained stability remain
+unverified. The following research chronology predates this success; see the
+[current handoff](HANDOFF.md) for the active state.
+
 Follow-up on 2026-10-18: native development is now available on the user's
 macOS 26.7.1 Mac. [AVConference transport findings](AVCONFERENCE_TRANSPORT_FINDINGS.md)
 record an explicit-destination send path for unconnected UDP sockets and the

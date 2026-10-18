@@ -109,7 +109,7 @@ class ExperimentTests(unittest.TestCase):
         self.assertNotIn(self.address, data)
         self.assertNotIn(self.directory.name, data)
         report = json.loads(data)
-        self.assertEqual(report['schemaVersion'], 3)
+        self.assertEqual(report['schemaVersion'], 5)
         self.assertEqual(report['highPerformanceSession'], 'unverified')
         if OPTIONS.mode == 'loopback':
             self.assertEqual(report['experiment'], 'loopback-ruby-tcp-udp')
@@ -118,6 +118,9 @@ class ExperimentTests(unittest.TestCase):
             self.assertNotIn('submittedDatagrams', report)
             self.assertFalse(report['nativeTCPAccepted'])
             self.assertFalse(report['remoteTCPConnected'])
+            self.assertEqual(report['nativeTCPConnectionCount'], 0)
+            self.assertEqual(report['remoteTCPConnectionCount'], 0)
+            self.assertEqual(report['completedTCPConnectionCount'], 0)
         else:
             self.assertEqual(report['experiment'], 'incoming-ruby-udp')
             self.assertEqual(report['receivedDatagrams'], 0)
