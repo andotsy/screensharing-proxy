@@ -1,86 +1,78 @@
 # Screen Sharing Rubyfier
 
-A native macOS patcher for High Performance Screen Sharing through system Ruby.
-**Version 1.0.2** supports native video, audio, and keyboard/mouse control.
+Rubyfier gets High Performance Screen Sharing working on a Mac whose firewall
+blocks the Screen Sharing app.
 
-**Screen Sharing Rubyfier.app** creates **Screen Sharing Rubyfied.app** from the
-Apple viewer already installed on the controlling Mac. It bundles optool, a
-compiled transport library and Ruby scripts; applying the patch requires no Xcode,
-command line tools, Python or gems. The original app and system settings remain
-untouched. The copy keeps the native connection UI and authentication flow.
+## Why this exists
 
-Click **Create Rubyfied App…** and choose a writable folder. Watch progress in the
-scrollable, selectable console, then open the created app and enter the sharing
-Mac's real IPv4 address. The copy offers to quit the original viewer if needed.
-See [installation](docs/INSTALL.md) and [patcher details](docs/RUBIED_PATCHER.md).
+In High Performance mode, the video and audio come back to your Mac as incoming
+network traffic. Normally that just works, and you don't need this project.
 
-The patcher runs on any installed Screen Sharing build on Apple silicon, but it
-has only been tested with the Screen Sharing executable from macOS 26.7.1
-(25G241). Other builds are patched with an untested-build note in the console.
-Live High Performance video, audio, and keyboard/mouse control have been verified
-on that tested build. Ruby owns the external network sockets; Apple's native media
-engine and image queue run inside the copied viewer. Other macOS builds and
-operation under the restricted viewer's network rules remain unverified.
-Allow Local Network access when macOS asks. See the installation guide if a
-previously denied permission prevents the connection.
+If the firewall blocks incoming connections for Screen Sharing, though, that
+media stream can't reach the app. System Ruby (`/usr/bin/ruby`) can still be
+allowed through. So Rubyfier makes a copy of Screen Sharing that sends its TCP
+and UDP traffic through a small Ruby relay instead of its own sockets.
 
-**Known issues**
+## How it works
 
-- Turning on **Dynamic Resolution** during a High Performance session
-  immediately corrupts the stream, and the connection closes. Leave Dynamic
-  Resolution off until this is fixed.
+Rubyfier copies the Screen Sharing app that's already on your Mac, adds a small
+library and the Ruby relay, and signs the copy locally. Your original Screen
+Sharing app isn't touched, and no firewall or network settings are changed.
 
-The app retains private diagnostics with one-click collection and ZIP export.
-The original icon and DMG layout are preserved. Build the local patcher with
-`bash Packaging/build-app.sh`; versioned DMG packaging uses
-`SSP_VERSION=1.0.2 bash Packaging/build-app-dmg.sh`. These commands do not
-publish a release. Existing tags and published assets must never be replaced.
+The copy, **Screen Sharing Rubyfied**, looks and behaves like Screen Sharing.
+Apple's code still handles sign-in, video, audio and input; only the network
+sockets move to Ruby. The download contains none of Apple's files.
 
-On the **viewer Mac**, using Swift 6.2+ / Xcode 26.2, automatically find the allowed
-`proxyd` without supplying its path:
+## Install
+
+1. Download the DMG from [Releases](https://github.com/andotsy/screensharing-proxy/releases)
+   and drag **Screen Sharing Rubyfier** to Applications.
+2. Open it, click **Create Rubyfied App…** and pick a folder. `~/Applications`
+   works without an admin password.
+3. Open **Screen Sharing Rubyfied**. If Screen Sharing is already running, it
+   asks to quit it first. Allow Local Network access when macOS asks.
+4. Connect with the other Mac's real IPv4 address (not 127.0.0.1) and choose
+   High Performance.
+
+The app is ad hoc signed, not notarized. If macOS won't open it, see
+[the install guide](docs/INSTALL.md#if-macos-blocks-the-app).
+
+## Compatibility
+
+- Apple silicon only.
+- Tested with Screen Sharing from macOS 26.7.1 (25G241). High Performance video,
+  audio and keyboard/mouse control work there.
+- On other macOS versions the patcher still runs and tells you the build is
+  untested. If Apple changed the parts the copy hooks into, the copy quits when
+  you open it.
+- Not yet tested on a Mac where the firewall actually blocks Screen Sharing.
+- After a macOS update, create a new copy.
+
+## Known issues
+
+- Turning on **Dynamic Resolution** during a High Performance session corrupts
+  the stream right away and the connection closes. Leave it off for now.
+
+## Building from source
+
+You need an Apple silicon Mac with Xcode 26.
 
 ```sh
-swift run -c release screensharing-proxy-diagnose discover --output proxyd-report.json
+bash Packaging/build-app.sh                         # app in .build/native-bundle/
+SSP_VERSION=1.0.2 bash Packaging/build-app-dmg.sh   # DMG in dist/
 ```
 
-For the full socket investigation, start the problematic High
-Performance connection and run from this checkout:
-
-```sh
-swift run -c release screensharing-proxy-diagnose collect \
-  --remote REMOTE_IP --samples 3 --output viewer-report.json
-```
-
-Replace `REMOTE_IP` with the remote Mac's numeric IP. The report is redacted by
-default and the output file is created with owner-only permissions. No elevated
-access is requested and no firewall or sharing settings are changed. Read
-[the diagnostic guide](docs/DIAGNOSTICS.md) for visibility limits and interpretation.
-On Linux the command reports the unsupported platform and exits 2.
-
-Development:
+Tests:
 
 ```sh
 swift test -Xswiftc -warnings-as-errors
-swift build -c release -Xswiftc -warnings-as-errors
+python3 Scripts/test-loopback-relay.py
+python3 Scripts/test-rubyfied-retry.py
+python3 Scripts/test-rubyfied-media.py
 ```
 
-Native macOS development uses the installed Xcode toolchain and system Ruby.
-In the original Linux cloud workspace use `bash Scripts/swift-cloud.sh test -j 4
--Xswiftc -warnings-as-errors` instead; the wrapper uses the installed, verified
-Swift 6.2 Linux toolchain and writable caches. There are no external package
-dependencies.
+Building doesn't publish anything. GitHub Actions builds and publishes a release
+when a version tag is pushed.
 
-Build a separate, ad-hoc-signed loopback-relay test ZIP on Apple silicon macOS:
-
-```sh
-bash Packaging/build-relay-experiment.sh loopback
-```
-
-This is a development artifact for controlled testing, not a published working
-proxy. The experiment branch's workflow also saves it as a CI artifact. Read the
-[native AVConference findings](docs/AVCONFERENCE_TRANSPORT_FINDINGS.md) before
-interpreting relay counters as media success.
-
-[Implementation handoff](docs/HANDOFF.md) ·
-[Transport findings](docs/TRANSPORT_FINDINGS.md) ·
-[Full plan](docs/IMPLEMENTATION_PLAN.md)
+[docs/RUBIED_PATCHER.md](docs/RUBIED_PATCHER.md) covers how the copy is patched,
+what the relay does and what it logs.
