@@ -36,7 +36,10 @@ struct BoundedCommandTests {
     }
 
     @Test func drainsBothFloodedPipesAndKillsProcessGroup() async {
-        let result = await runner.run(CommandSpec("/bin/sh", ["-c", "yes output & yes error >&2 & wait"], timeout: 0.2, outputLimit: 128))
+        // The deadline clock starts before spawn, so a short one can reach the
+        // group before a writer runs on a busy runner. Both writers exceed the
+        // limit almost instantly once running; the deadline only absorbs startup.
+        let result = await runner.run(CommandSpec("/bin/sh", ["-c", "yes output & yes error >&2 & wait"], timeout: 2, outputLimit: 128))
         #expect(result.outcome == .timedOut)
         #expect(result.output.count == 128)
         #expect(result.errorOutput.count == 128)
