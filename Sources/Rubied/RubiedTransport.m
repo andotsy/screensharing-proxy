@@ -281,7 +281,7 @@ static void connectThroughRuby(id session, SEL selector, id address, id options,
         return;
     }
     if (!IN6_IS_ADDR_V4MAPPED(&bytes) || bytes.s6_addr[12] == 127 || port < 1024) {
-        refuse(session, @"Enter the sharing Mac’s IPv4 address, not localhost. This build supports remote IPv4 connections.");
+        refuse(session, @"Rubyfied only connects to another Mac by its IPv4 address. Enter the sharing Mac’s IPv4 address, such as 192.168.1.20.");
         return;
     }
     if (!host) return;
