@@ -30,9 +30,8 @@ sustained performance remain separate, unverified checks.
     service on this Mac.
    Allow Local Network access when prompted. A previously denied choice can be
    changed in System Settings → Privacy & Security → Local Network.
-3. In the native connection UI, enter the sharing Mac's **real IPv4 address** and
-   normal TCP port, then authenticate normally. Do not enter 127.0.0.1 or 15900.
-   Choose High Performance when offered.
+3. In the native connection UI, enter the sharing Mac's **IPv4 address** and
+   normal TCP port, then authenticate normally. Choose High Performance when offered.
 4. Quit Rubyfied to stop its Ruby child and release its sockets. A new native
    connection attempt can restart an exited relay after bounded cleanup; at most
    three restarts are permitted per minute. An active relay stays pinned to its

@@ -150,7 +150,7 @@ begin
   File.rename(app, destination)
   Dir.rmdir(staging)
   puts "Created #{destination}"
-  puts 'Open the copy and enter the remote Mac’s real IPv4 address. Choose High Performance when offered.'
+  puts 'Open the copy and enter the remote Mac’s IPv4 address. Choose High Performance when offered.'
   puts 'Allow Local Network access if macOS asks when opening the new app.'
 rescue StandardError => error
   warn "Patcher: #{error.message}"
