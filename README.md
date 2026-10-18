@@ -24,6 +24,12 @@ operation under the restricted viewer's network rules remain unverified.
 Allow Local Network access when macOS asks. See the installation guide if a
 previously denied permission prevents the connection.
 
+**Known issues**
+
+- Turning on **Dynamic Resolution** during a High Performance session
+  immediately corrupts the stream, and the connection closes. Leave Dynamic
+  Resolution off until this is fixed.
+
 The app retains private diagnostics with one-click collection and ZIP export.
 The original icon and DMG layout are preserved. Build the local patcher with
 `bash Packaging/build-app.sh`; versioned DMG packaging uses
