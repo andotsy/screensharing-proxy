@@ -26,7 +26,7 @@ public enum BackendEvent: Codable, Sendable, Equatable {
     case control(nativeAccepted: Bool, remoteConnected: Bool, nativeReadClosed: Bool, remoteReadClosed: Bool)
     case controlConnections(accepted: UInt64, connected: UInt64, completed: UInt64)
     case connectionClosed(reason: TCPClosureReason, discardedBytes: UInt64)
-    case failureContext(operation: BackendOperation, systemError: BackendSystemError?)
+    case failureContext(operation: BackendOperation, systemError: BackendSystemError?, port: UInt16? = nil)
     case stopped
     case failed(code: BackendFailureCode)
 }
@@ -36,6 +36,7 @@ public enum TCPClosureReason: String, Codable, Sendable { case endOfStream, peer
 /// Fixed labels only; no socket addresses, exception strings or payloads.
 public enum BackendOperation: String, Codable, Sendable {
     case configuration, socketReservation, routeCheck, sourceCheck, viewerAccept, hostBind, hostConnect
+    case udpExternalBind, udpFeedbackBind, udpInjectorBind, udpPeerConnect, tcpListenerBind, tcpListen
     case tcpRead, tcpWrite, udpReceive, udpSend, tcpShutdown, parentInput, eventOutput, waiting
 }
 

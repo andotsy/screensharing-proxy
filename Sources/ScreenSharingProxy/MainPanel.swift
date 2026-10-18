@@ -4,12 +4,11 @@ import ProxyCore
 import SwiftUI
 
 private enum AppPane: String, CaseIterable {
-    case proxy = "Proxy", settings = "Settings", diagnostics = "Diagnostics"
+    case proxy = "Rubyfy", diagnostics = "Diagnostics"
     var symbol: String {
         switch self {
-        case .proxy: "network"
+        case .proxy: "wand.and.stars"
         case .diagnostics: "waveform.path.ecg"
-        case .settings: "gearshape"
         }
     }
 }
@@ -17,6 +16,7 @@ private enum AppPane: String, CaseIterable {
 struct MainPanel: View {
     @Bindable var model: DiagnosticsModel
     @Bindable var relay: RelayModel
+    @Bindable var rubyfier: RubyfierModel
     @State private var pane = AppPane.proxy
 
     var body: some View {
@@ -41,24 +41,21 @@ struct MainPanel: View {
             .padding(.vertical, 12).frame(maxWidth: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
             Divider()
-            ScrollView {
-                Group {
-                    switch pane {
-                    case .proxy: ProxyPane(relay: relay)
-                    case .settings: RelaySettingsPane(relay: relay)
-                    case .diagnostics: diagnostics
-                    }
-                }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+            switch pane {
+            case .proxy: RubyfierPane(model: rubyfier)
+            case .diagnostics:
+                ScrollView { diagnostics.padding(24).frame(maxWidth: .infinity, alignment: .leading) }
             }
             Divider()
             HStack {
                 Text("v\(ProxyBuild.version)")
                 Spacer()
-                Text("Experimental relay")
+                Text("Local experimental build")
             }
             .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
         }
         .background { WindowMaterial().allowsHitTesting(false).accessibilityHidden(true) }
+        .frame(minWidth: 680, minHeight: 620)
     }
 
     private var diagnostics: some View {

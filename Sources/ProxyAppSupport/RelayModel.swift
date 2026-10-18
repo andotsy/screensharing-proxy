@@ -120,7 +120,8 @@ public final class RelayModel {
         case .control: break
         case let .connectionClosed(reason, discarded):
             report?.lastTCPClosure = reason; report?.discardedTCPBytes += discarded
-        case let .failureContext(operation, error): report?.failureOperation = operation; report?.failureSystemError = error
+        case let .failureContext(operation, error, port):
+            report?.failureOperation = operation; report?.failureSystemError = error; report?.failurePort = port
         case let .failed(code): report?.failure = code
         case .stopped: report?.relayStopAcknowledged = true
         }
@@ -134,7 +135,12 @@ public final class RelayModel {
         case let .failed(code):
             report?.termination = "failed"; report?.failure = code
             switch code {
-            case .addressInUse: message = "A required port is in use. Quit Screen Sharing, then try again."
+            case .addressInUse:
+                if let port = report?.failurePort {
+                    let isTCP = report?.failureOperation == .tcpListenerBind || report?.failureOperation == .tcpListen
+                    let transport = isTCP ? "TCP" : "UDP"
+                    message = "\(transport) port \(port) is already in use. The relay left its existing owner running."
+                } else { message = "A required port is already in use. Save the session report for details." }
             case .connectionTimedOut: message = "The connection timed out. Check the host address and try again."
             case .localAddressUnavailable, .routeChanged: message = "The network address is no longer available. Connect again after the network recovers."
             case .unavailable: message = "The system Ruby relay could not start on this Mac."

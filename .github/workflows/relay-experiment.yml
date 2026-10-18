@@ -47,10 +47,10 @@ jobs:
       - name: Build and smoke-test the signed native bundle with relay resources
         run: |
           bash Packaging/build-app.sh
-          python3 Scripts/smoke-app.py .build/native-bundle/ScreenSharingProxy.app
+          python3 Scripts/smoke-app.py ".build/native-bundle/Screen Sharing Rubyfier.app"
           python3 - <<'PY'
           from pathlib import Path
-          resources = Path('.build/native-bundle/ScreenSharingProxy.app/Contents/Resources')
+          resources = Path('.build/native-bundle/Screen Sharing Rubyfier.app/Contents/Resources')
           for name in ['relay.rb', 'incoming-relay.rb', 'loopback-relay.rb']:
               scripts = list(resources.rglob(name))
               assert len(scripts) == 1

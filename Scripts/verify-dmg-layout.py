@@ -10,7 +10,7 @@ with DSStore.open(str(volume / '.DS_Store'), 'r') as store:
     positions = {entry.filename: entry.value for entry in store if entry.code == b'Iloc'}
     view = store['.']['icvp']
     window = store['.']['bwsp']
-assert positions['ScreenSharingProxy.app'] == (190, 214), positions
+assert positions['Screen Sharing Rubyfier.app'] == (190, 214), positions
 assert positions['Applications'] == (570, 214), positions
 assert positions['README.html'] == (270, 402), positions
 assert positions['Terminal'] == (490, 402), positions

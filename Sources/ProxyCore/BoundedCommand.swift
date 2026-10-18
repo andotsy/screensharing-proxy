@@ -52,20 +52,22 @@ private final class CancellationFlag: @unchecked Sendable {
 }
 
 public struct BoundedCommandRunner: CommandRunning {
-    public init() {}
+    private let outputHandler: (@Sendable (Data, Bool) -> Void)?
+    public init(outputHandler: (@Sendable (Data, Bool) -> Void)? = nil) { self.outputHandler = outputHandler }
 
     public func run(_ spec: CommandSpec) async -> CommandResult {
         let flag = CancellationFlag()
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 DispatchQueue.global(qos: .utility).async {
-                    continuation.resume(returning: Self.execute(spec, cancellation: flag))
+                    continuation.resume(returning: Self.execute(spec, cancellation: flag, outputHandler: outputHandler))
                 }
             }
         } onCancel: { flag.cancel() }
     }
 
-    private static func execute(_ spec: CommandSpec, cancellation: CancellationFlag) -> CommandResult {
+    private static func execute(_ spec: CommandSpec, cancellation: CancellationFlag,
+                                outputHandler: (@Sendable (Data, Bool) -> Void)?) -> CommandResult {
         let started = ProcessInfo.processInfo.systemUptime
         var output = Data(), errors = Data()
         var outputTruncated = false, errorTruncated = false
@@ -110,7 +112,7 @@ public struct BoundedCommandRunner: CommandRunning {
 
         // Fair fixed read budgets stop a busy stdout from starving stderr,
         // timeout checks or cancellation. Retain only the configured prefix.
-        func drain(_ fd: Int32, into data: inout Data, eof: inout Bool, truncated: inout Bool) {
+        func drain(_ fd: Int32, into data: inout Data, eof: inout Bool, truncated: inout Bool, isError: Bool) {
             guard !eof else { return }
             var buffer = [UInt8](repeating: 0, count: 16_384)
             for _ in 0..<4 {
@@ -123,6 +125,7 @@ public struct BoundedCommandRunner: CommandRunning {
                 }
                 let retained = min(count, max(0, spec.outputLimit - data.count))
                 data.append(contentsOf: buffer.prefix(retained))
+                if retained > 0 { outputHandler?(Data(buffer.prefix(retained)), isError) }
                 if retained < count { truncated = true }
             }
         }
@@ -138,8 +141,8 @@ public struct BoundedCommandRunner: CommandRunning {
                     _ = ssp_signal_group(child.pid, SIGTERM)
                 }
             }
-            drain(child.output_fd, into: &output, eof: &outputEOF, truncated: &outputTruncated)
-            drain(child.error_fd, into: &errors, eof: &errorEOF, truncated: &errorTruncated)
+            drain(child.output_fd, into: &output, eof: &outputEOF, truncated: &outputTruncated, isError: false)
+            drain(child.error_fd, into: &errors, eof: &errorEOF, truncated: &errorTruncated, isError: true)
             if !hasExited {
                 let observation = ssp_has_exited(child.pid)
                 hasExited = observation == 1

@@ -26,7 +26,7 @@ Child = SUPPORT['Child']
 
 
 @unittest.skipUnless(sys.platform == 'darwin', 'Requires Darwin duplicate-connect semantics')
-class LoopbackTests(unittest.TestCase):
+class LoopbackFixture(unittest.TestCase):
     def setUp(self):
         self.owned, self.children = [], []
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
@@ -106,12 +106,17 @@ class LoopbackTests(unittest.TestCase):
         self.assertEqual(sock.getsockname(), ('0.0.0.0', self.base + offset))
         return sock
 
+    def send_feedback(self, native, payload, offset):
+        native.sendto(payload, ('127.0.0.1', self.base + offset))
+
     def tearDown(self):
         for child in self.children:
             child.close()
         for sock in self.owned:
             sock.close()
 
+
+class LoopbackTests(LoopbackFixture):
     def test_all_channels_preserve_expected_peers_and_datagram_boundaries(self):
         child, _, _ = self.connected_pair()
         native = [self.native(offset) for offset in range(3)]
@@ -120,7 +125,7 @@ class LoopbackTests(unittest.TestCase):
                 payload = os.urandom(length)
                 peer.sendto(payload, (self.address, self.base + offset))
                 self.assertEqual(native[offset].recvfrom(65535), (payload, ('127.0.0.1', self.base + offset)))
-                native[offset].sendto(payload, ('127.0.0.1', self.base + offset))
+                self.send_feedback(native[offset], payload, offset)
                 self.assertEqual(peer.recvfrom(65535), (payload, (self.address, self.base + offset)))
         self.assertEqual(child.event('media'), {'receivedDatagrams': 12, 'sentDatagrams': 12, 'droppedDatagrams': 0})
         self.assertEqual(select.select(native + self.media, [], [], .1)[0], [])
@@ -171,12 +176,34 @@ class LoopbackTests(unittest.TestCase):
                 occupied.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                 occupied.bind((address, self.base + 1))
                 child = self.start()
+                context = child.event('failureContext')
+                operation = 'udpFeedbackBind' if address == '127.0.0.1' else 'udpExternalBind'
+                self.assertEqual(context, {'operation': operation, 'systemError': 'addressInUse', 'port': self.base + 1})
                 self.assertEqual(child.event('failed')['code'], 'addressInUse')
                 self.assertEqual(child.process.wait(timeout=3), 1)
                 for free_address in (self.address, '127.0.0.1'):
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
                         probe.bind((free_address, self.base))
                 occupied.close()
+
+    def test_tcp_listener_conflict_is_distinguished_from_media_and_preserves_owner(self):
+        with socket.socket() as occupied:
+            occupied.bind(('127.0.0.1', self.listener_port))
+            occupied.listen(1)
+            child = self.start()
+            self.assertEqual(child.event('failureContext'), {
+                'operation': 'tcpListenerBind', 'systemError': 'addressInUse', 'port': self.listener_port})
+            self.assertEqual(child.event('failed')['code'], 'addressInUse')
+            self.assertEqual(child.process.wait(timeout=3), 1)
+            for address in (self.address, '127.0.0.1'):
+                for offset in range(3):
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                        probe.bind((address, self.base + offset))
+            with socket.create_connection(('127.0.0.1', self.listener_port), timeout=1) as client:
+                accepted, _ = occupied.accept()
+                with accepted:
+                    accepted.sendall(b'owner')
+                    self.assertEqual(client.recv(5), b'owner')
 
     def test_parent_eof_releases_tcp_and_all_udp_reservations(self):
         child, _, _ = self.connected_pair()
@@ -253,7 +280,7 @@ class LoopbackTests(unittest.TestCase):
         self.assertEqual(next_client.recv(21), b'authenticated fixture')
         self.media[0].sendto(b'video', (self.address, self.base))
         self.assertEqual(native.recvfrom(100), (b'video', ('127.0.0.1', self.base)))
-        native.sendto(b'feedback', ('127.0.0.1', self.base))
+        self.send_feedback(native, b'feedback', 0)
         self.assertEqual(self.media[0].recvfrom(100), (b'feedback', (self.address, self.base)))
         next_client.shutdown(socket.SHUT_WR)
         self.assertEqual(next_server.recv(1), b'')
@@ -368,7 +395,7 @@ exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
             native = self.native(0)
             self.media[0].sendto(b'media', (self.address, self.base))
             self.assertEqual(native.recvfrom(1024), (b'media', ('127.0.0.1', self.base)))
-            native.sendto(b'feedback', ('127.0.0.1', self.base))
+            self.send_feedback(native, b'feedback', 0)
             self.assertEqual(self.media[0].recvfrom(1024), (b'feedback', (self.address, self.base)))
             self.assertIsNone(child.process.poll())
 
@@ -451,6 +478,68 @@ exit ScreenSharingRelay::LoopbackRelay.new(STDIN, STDOUT).run
                 if helper.poll() is None:
                     helper.kill()
                 helper.communicate(timeout=3)
+
+
+class ConnectedLoopbackTests(LoopbackFixture):
+    def setUp(self):
+        super().setUp()
+        for _ in range(50):
+            base, reservations = self.reserve_three(['127.0.0.1'])
+            for sock in reservations:
+                sock.close()
+            if abs(base - self.base) >= 3:
+                self.native_base = base
+                break
+        else:
+            self.fail('No distinct native port range')
+        self.config['nativeMediaBase'] = self.native_base
+
+    def native(self, offset):
+        sock = self.own(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 131072)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
+        sock.bind(('127.0.0.1', self.native_base + offset))
+        sock.connect(('127.0.0.1', self.base + offset))
+        self.assertEqual(sock.getpeername(), ('127.0.0.1', self.base + offset))
+        return sock
+
+    def send_feedback(self, native, payload, offset):
+        native.send(payload)
+
+    test_datagram_boundaries_and_peer_identity = LoopbackTests.test_all_channels_preserve_expected_peers_and_datagram_boundaries
+    test_sequential_login_connections = LoopbackTests.test_viewer_probe_can_close_and_reconnect_for_login_in_same_relay
+    test_parent_eof_releases_reservations = LoopbackTests.test_parent_eof_releases_tcp_and_all_udp_reservations
+    test_occupied_owners_and_partial_cleanup = LoopbackTests.test_existing_owners_refuse_startup_and_partial_reservations_are_released
+
+    def test_connected_send_without_destination_and_fresh_native_receiver(self):
+        child, _, _ = self.connected_pair()
+        for offset, peer in enumerate(self.media):
+            for _ in range(2):
+                native = self.native(offset)
+                native.send(b'feedback')
+                self.assertEqual(peer.recvfrom(100), (b'feedback', (self.address, self.base + offset)))
+                peer.sendto(b'media', (self.address, self.base + offset))
+                self.assertEqual(native.recvfrom(100), (b'media', ('127.0.0.1', self.base + offset)))
+                native.close()
+        self.assertEqual(child.event('media'), {'receivedDatagrams': 6, 'sentDatagrams': 6, 'droppedDatagrams': 0})
+
+    def test_unexpected_peers_cannot_reach_either_connected_endpoint(self):
+        child, _, _ = self.connected_pair()
+        native = self.native(0)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as unrelated:
+            unrelated.bind(('127.0.0.1', 0))
+            unrelated.sendto(b'unrelated', ('127.0.0.1', self.base))
+            unrelated.sendto(b'unrelated', ('127.0.0.1', self.native_base))
+        self.assertEqual(select.select([native, self.media[0]], [], [], .1)[0], [])
+        self.assertEqual(child.event('media'), {'receivedDatagrams': 0, 'sentDatagrams': 0, 'droppedDatagrams': 0})
+
+    def test_invalid_or_overlapping_native_ports_fail_before_binding(self):
+        for value in (0, 1023, 65534, '15900', self.base - 2, self.base, self.base + 2):
+            with self.subTest(value=value):
+                self.config['nativeMediaBase'] = value
+                child = self.start()
+                self.assertEqual(child.event('failed')['code'], 'invalidConfiguration')
+                self.assertEqual(child.process.wait(timeout=3), 1)
 
 
 if __name__ == '__main__':

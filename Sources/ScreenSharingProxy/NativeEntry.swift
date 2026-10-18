@@ -7,12 +7,15 @@ import ProxyCore
 enum NativeEntry {
     static func main() {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        if arguments == ["--version"] { print("Screen Sharing Proxy \(ProxyBuild.version)"); return }
+        if arguments == ["--version"] { print("Screen Sharing Rubyfier \(ProxyBuild.version)"); return }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         if arguments.count == 2, arguments[0] == "--smoke-test" {
             delegate.smokeDestination = URL(fileURLWithPath: arguments[1])
             FileHandle.standardError.write(Data("Starting native smoke app\n".utf8))
+        }
+        if arguments.count == 2, arguments[0] == "--patch-smoke-test" {
+            delegate.patchSmokeDirectory = URL(fileURLWithPath: arguments[1])
         }
         if arguments.count == 4, arguments[0] == "--relay-smoke-test",
            let listener = UInt16(arguments[2]), listener >= 1024,
@@ -31,9 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var model = DiagnosticsModel(saver: saver)
     private let relaySaver = ArchiveSavePanel(sessionReport: true)
     private lazy var relay = RelayModel(saver: relaySaver, launcher: relaySmoke == nil ? ScreenSharingLauncher() : SmokeViewerLauncher())
-    private lazy var panel = PanelController(model: model, relay: relay)
+    private let rubyfier = RubyfierModel()
+    private lazy var panel = PanelController(model: model, relay: relay, rubyfier: rubyfier)
     private var quitting = false
     var smokeDestination: URL?
+    var patchSmokeDirectory: URL?
     var relaySmoke: (destination: URL, listener: UInt16, media: UInt16)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,6 +47,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.show()
         saver.parentWindow = panel.windowForSheet
         relaySaver.parentWindow = panel.windowForSheet
+        if let patchSmokeDirectory {
+            rubyfier.create(in: patchSmokeDirectory)
+            Task {
+                await rubyfier.waitForCompletion()
+                try? await Task.sleep(for: .milliseconds(100))
+                print("Patch smoke: created=\(rubyfier.createdApp != nil), visible=\(panel.hasVisibleContent), consoleAndMinimum=\(panel.hasUsableConsoleAndMinimumSize)")
+                guard let app = rubyfier.createdApp, panel.hasVisibleContent,
+                      panel.hasUsableConsoleAndMinimumSize,
+                      rubyfier.consoleText.contains("Verified the app signature") else {
+                    FileHandle.standardError.write(Data(rubyfier.consoleText.utf8))
+                    exit(1)
+                }
+                let result = await BoundedCommandRunner().run(CommandSpec(
+                    app.appendingPathComponent("Contents/MacOS/RubiedLauncher").path,
+                    ["--rubied-self-test"], timeout: 25))
+                let text = String(decoding: result.errorOutput, as: UTF8.self)
+                guard result.complete, text.contains("nativeUILaunched=1"),
+                      text.contains("originalAddressPreserved=1"),
+                      text.contains("connectedMediaSocketDictionaries=3"),
+                      text.contains("nativeSocketConflictRefused=1"),
+                      text.contains("tcpAndThreeNativeUDPChannels=1") else {
+                    FileHandle.standardError.write(result.errorOutput)
+                    exit(1)
+                }
+                print("Rubyfier: patch, console, window minimum, signature, injected native UI, TCP and three bidirectional native UDP channels passed.")
+                NSApp.terminate(nil)
+            }
+            return
+        }
         if let relaySmoke {
             relay.remoteAddress = "192.0.2.1" // Route selection only; no connection or packets sent.
             relay.listenerPort = Int(relaySmoke.listener); relay.mediaBase = Int(relaySmoke.media)
@@ -94,18 +128,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitting { return .terminateLater }
-        guard model.isBusy || relay.isRunning || relay.saving else { return .terminateNow }
+        guard model.isBusy || relay.isRunning || relay.saving || rubyfier.isBusy else { return .terminateNow }
         quitting = true
-        Task { await relay.stop(); await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
+        rubyfier.cancel()
+        Task { await rubyfier.waitForCompletion(); await relay.stop(); await model.stop(); sender.reply(toApplicationShouldTerminate: true) }
         return .terminateLater
     }
     private func installMenu() {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Screen Sharing Proxy", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Screen Sharing Rubyfier", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Screen Sharing Proxy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Screen Sharing Rubyfier", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu; menu.addItem(appItem)
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         let edit = NSMenu(title: "Edit")

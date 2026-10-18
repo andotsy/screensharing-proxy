@@ -5,7 +5,7 @@ from pathlib import Path
 # dmgbuild executes settings without __file__; the workflow runs at repo root.
 root = Path(defines.get("root", ".")).resolve()
 files = [
-    str(root / ".build" / "native-bundle" / "ScreenSharingProxy.app"),
+    str(root / ".build" / "native-bundle" / "Screen Sharing Rubyfier.app"),
     str(root / "Packaging" / "README.html"),
 ]
 symlinks = {"Applications": "/Applications", "Terminal": "/System/Applications/Utilities/Terminal.app"}
@@ -30,7 +30,7 @@ label_pos = "bottom"
 text_size = 13
 icon_size = 88
 icon_locations = {
-    "ScreenSharingProxy.app": (190, 214),
+    "Screen Sharing Rubyfier.app": (190, 214),
     "Applications": (570, 214),
     "README.html": (270, 402),
     "Terminal": (490, 402),

@@ -4,6 +4,19 @@ import Testing
 
 @Suite("Bounded backend protocol and session generations")
 struct BackendProtocolTests {
+    @Test func socketFailurePortIsBoundedAndOlderContextStillDecodes() throws {
+        let id = UUID()
+        let prefix = "{\"version\":1,\"sessionID\":\"\(id)\",\"event\":{\"failureContext\":{\"operation\":\"tcpListenerBind\",\"systemError\":\"addressInUse\""
+        var decoder = BackendLineDecoder()
+        let withPort = try decoder.feed(Data((prefix + ",\"port\":5900}}}\n").utf8))
+        #expect(withPort.first?.event == .failureContext(operation: .tcpListenerBind, systemError: .addressInUse, port: 5900))
+        let older = try decoder.feed(Data((prefix + "}}}\n").utf8))
+        #expect(older.first?.event == .failureContext(operation: .tcpListenerBind, systemError: .addressInUse))
+        #expect(throws: BackendProtocolError.invalidMessage) {
+            try decoder.feed(Data((prefix + ",\"port\":65536}}}\n").utf8))
+        }
+    }
+
     @Test func splitAndCoalescedFramesDecodeInOrder() throws {
         let id = UUID()
         let messages = [BackendEnvelope(sessionID: id, event: .ready),

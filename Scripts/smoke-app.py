@@ -16,15 +16,23 @@ import zipfile
 def main():
     bundle = Path(sys.argv[1]).resolve()
     info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+    assert bundle.name == "Screen Sharing Rubyfier.app"
+    assert info["CFBundleName"] == info["CFBundleDisplayName"] == "Screen Sharing Rubyfier"
     assert info["CFBundleIdentifier"] == "com.andotsy.screensharing-proxy"
     assert info["LSMinimumSystemVersion"] == "14.0"
     icon = bundle / "Contents/Resources/AppIcon.icns"
     assert icon.read_bytes().startswith(b"icns") and icon.stat().st_size > 1000
     assert info["CFBundleIconName"] == "AppIcon"
     assert (bundle / "Contents/Resources/Assets.car").stat().st_size > 1000
+    payload = bundle / "Contents/Resources/Rubyfier"
+    for name in ["patch.rb", "Payload/optool", "Payload/RubiedLauncher",
+                 "Payload/RubiedTransport.dylib", "Payload/Relay/loopback-relay.rb",
+                 "Payload/Relay/relay.rb", "Payload/compatibility.json",
+                 "Licenses/optool.txt", "Licenses/ArgumentParser.md"]:
+        assert (payload / name).stat().st_size > 0, name
     binary = bundle / "Contents/MacOS/ScreenSharingProxy"
     version = subprocess.run([str(binary), "--version"], capture_output=True, text=True, check=True)
-    assert version.stdout.strip() == "Screen Sharing Proxy " + info["SSPReleaseVersion"]
+    assert version.stdout.strip() == "Screen Sharing Rubyfier " + info["SSPReleaseVersion"]
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     with tempfile.TemporaryDirectory(prefix="ssp-app-") as temporary:
         report = Path(temporary) / "diagnostics.zip"

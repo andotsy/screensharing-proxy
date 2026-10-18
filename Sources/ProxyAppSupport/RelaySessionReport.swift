@@ -2,7 +2,7 @@ import Foundation
 import ProxyCore
 
 public struct RelaySessionReport: Encodable, Sendable {
-    public let schemaVersion = 1
+    public let schemaVersion = 2
     public let toolVersion = ProxyBuild.version
     public let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     public var termination = "starting"
@@ -19,6 +19,7 @@ public struct RelaySessionReport: Encodable, Sendable {
     public var failure: BackendFailureCode?
     public var failureOperation: BackendOperation?
     public var failureSystemError: BackendSystemError?
+    public var failurePort: UInt16?
     public var lastTCPClosure: TCPClosureReason?
     public var discardedTCPBytes: UInt64 = 0
     public let highPerformanceSession = "unverified"

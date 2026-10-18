@@ -45,6 +45,7 @@ module ScreenSharingRelay
       configure(read_configuration)
       @operation = 'socketReservation'
       prepare
+      @reservation_port = nil
       event('ready', {})
       @last_status = ScreenSharingRelay.now
       @accept_deadline = @last_status + 120
@@ -233,7 +234,9 @@ module ScreenSharingRelay
       # Retain the final counters even when failure occurs between periodic
       # updates. Only fixed labels are emitted, never exception text or errno paths.
       status if @ready
-      event('failureContext', 'operation' => @operation, 'systemError' => system_error)
+      context = { 'operation' => @operation, 'systemError' => system_error }
+      context['port'] = @reservation_port if @reservation_port
+      event('failureContext', context)
       event('failed', 'code' => code)
     end
 

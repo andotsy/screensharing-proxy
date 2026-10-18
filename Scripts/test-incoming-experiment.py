@@ -109,7 +109,7 @@ class ExperimentTests(unittest.TestCase):
         self.assertNotIn(self.address, data)
         self.assertNotIn(self.directory.name, data)
         report = json.loads(data)
-        self.assertEqual(report['schemaVersion'], 5)
+        self.assertEqual(report['schemaVersion'], 6)
         self.assertEqual(report['highPerformanceSession'], 'unverified')
         if OPTIONS.mode == 'loopback':
             self.assertEqual(report['experiment'], 'loopback-ruby-tcp-udp')
@@ -169,10 +169,30 @@ class ExperimentTests(unittest.TestCase):
             self.assertEqual(process.returncode, 1)
             report = self.read_report()
             self.assertEqual(report['failure'], 'addressInUse')
-            self.assertEqual(report['failureOperation'], 'socketReservation')
+            expected_operation = 'udpExternalBind' if OPTIONS.mode == 'loopback' else 'socketReservation'
+            self.assertEqual(report['failureOperation'], expected_operation)
+            if OPTIONS.mode == 'loopback':
+                self.assertEqual(report['failurePort'], self.base + 1)
             self.assertEqual(report['failureSystemError'], 'addressInUse')
             self.assertFalse(report['relayReady'])
             self.assertEqual(occupied.getsockname(), (self.address, self.base + 1))
+        self.assert_ports_available()
+
+    @unittest.skipUnless(OPTIONS.mode == 'loopback', 'Only loopback owns a TCP listener')
+    def test_tcp_conflict_report_names_the_actual_port_and_operation(self):
+        with socket.socket() as occupied:
+            occupied.bind(('127.0.0.1', self.listener_port))
+            occupied.listen(1)
+            process = self.start()
+            _, stderr = process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 1)
+            report = self.read_report()
+            self.assertEqual(report['failure'], 'addressInUse')
+            self.assertEqual(report['failureOperation'], 'tcpListenerBind')
+            self.assertEqual(report['failurePort'], self.listener_port)
+            self.assertIn(f'Affected port: {self.listener_port}.'.encode(), stderr)
+            self.assertFalse(report['relayReady'])
+            self.assertEqual(occupied.getsockname(), ('127.0.0.1', self.listener_port))
         self.assert_ports_available()
 
 

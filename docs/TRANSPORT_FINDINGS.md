@@ -1,5 +1,39 @@
 # Transport findings
 
+**Latest Rubyfier test:** the user confirms Standard mode works in r3, while
+High Performance is a grey screen with incoming Ruby UDP, native helper calls,
+and zero outgoing UDP. R4 gives AVC exclusive connected loopback media sockets
+on separate native ports; its Apple socket-dictionary and three-channel
+round-trip tests pass. Native stream/first-frame/feedback callbacks are now
+counted. The user will run the live test; decoded High Performance is pending.
+See [the r4 path](RUBIED_PATCHER.md).
+
+**Current direction:** the user requested a self-contained Screen Sharing
+Rubyfier patcher. The copied native app now passes injected UI launch and a
+synthetic TCP plus three-channel bidirectional native UDP fixture through Ruby.
+It bypasses the UI local-target classification by adapting the engine transport
+after classification. Live High Performance remains unproven. See
+[patcher details](RUBIED_PATCHER.md) and [current handoff](HANDOFF.md).
+The earlier loopback and privileged-UDP investigations below are historical.
+
+**Current blocker:** native macOS 26.7.1 inspection and an owned-process runtime
+probe show that 127.0.0.1:15900 triggers Apple's local-tunnel classification,
+which disables Pro mode. The previous TCP-only session does not validate the
+intended media path. The corrected launcher tests local TCP 5900, subject to
+existing port ownership and Apple's self-connection check. Release is held.
+See [native local target findings](NATIVE_LOCAL_TARGET_FINDINGS.md).
+
+The schema-6 controlling-Mac attempt now identifies a TCP 5900 listener bind
+conflict, after all UDP reservations succeeded. Fully quitting the viewer did
+not resolve it. Read-only native policy inspection excludes the known quality
+option/internal-build preference as a simple fix. An incoming-only design that
+preserves the remote source address is being investigated locally before any
+further live trial; no successful native media path is claimed. A privileged
+raw descriptor, retained after dropping root, now passes source-preserving
+delivery to the actual Apple UDP helper on owned high ports. This remains a
+socket fixture, not a live SRTP session or app implementation. See
+[the source-preserving investigation](SOURCE_PRESERVING_UDP_FINDINGS.md).
+
 Latest status on 2026-10-18: the user reports a live connection through the
 loopback relay after the login-reconnect fix, explicitly selecting High
 Performance with keyboard and mouse working. Response is slower and colors

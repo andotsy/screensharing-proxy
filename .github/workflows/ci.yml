@@ -34,12 +34,13 @@ jobs:
         run: |
           swift build -Xswiftc -warnings-as-errors
           swift test -Xswiftc -warnings-as-errors
+          python3 Scripts/test-loopback-relay.py
           export SSP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)
           bash Packaging/build-app-dmg.sh
           python3 Scripts/smoke-cli.py .build/release/screensharing-proxy-diagnose
-          python3 Scripts/smoke-app.py .build/native-bundle/ScreenSharingProxy.app
+          python3 Scripts/smoke-app.py ".build/native-bundle/Screen Sharing Rubyfier.app"
           mount_path=$(mktemp -d "$RUNNER_TEMP/ssp-ci-mount.XXXXXX")
-          hdiutil attach "dist/ScreenSharingProxy-v$SSP_VERSION-macOS-arm64.dmg" -readonly -nobrowse -mountpoint "$mount_path"
+          hdiutil attach "dist/ScreenSharingRubyfier-v$SSP_VERSION-macOS-arm64.dmg" -readonly -nobrowse -mountpoint "$mount_path"
           trap 'hdiutil detach "$mount_path"' EXIT
           .build/dmg-venv/bin/python Scripts/verify-dmg-layout.py "$mount_path"
       - name: Save native smoke failure evidence

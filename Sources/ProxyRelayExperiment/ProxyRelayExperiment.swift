@@ -7,7 +7,7 @@ import Glibc
 #endif
 
 private struct ExperimentReport: Encodable {
-    let schemaVersion = 5
+    let schemaVersion = 6
     let experiment: String
     let operatingSystem = ProcessInfo.processInfo.operatingSystemVersionString
     let requestedDurationSeconds: Int
@@ -27,6 +27,7 @@ private struct ExperimentReport: Encodable {
     var failure: BackendFailureCode?
     var failureOperation: BackendOperation?
     var failureSystemError: BackendSystemError?
+    var failurePort: UInt16?
     var nativeTCPAccepted: Bool?
     var remoteTCPConnected: Bool?
     var nativeTCPReadClosed: Bool?
@@ -104,8 +105,9 @@ private final class Observation: @unchecked Sendable {
                 report.completedTCPConnectionCount = completed
             case let .connectionClosed(reason, discarded):
                 report.lastTCPClosure = reason; report.discardedTCPBytes += discarded
-            case let .failureContext(operation, systemError):
+            case let .failureContext(operation, systemError, port):
                 report.failureOperation = operation; report.failureSystemError = systemError
+                report.failurePort = port
             }
         }
     }
@@ -249,6 +251,7 @@ struct ProxyRelayExperiment {
         if let failure = report.failure {
             status("Relay failure: \(failure.rawValue).\n")
             if let operation = report.failureOperation { status("Failure stage: \(operation.rawValue).\n") }
+            if let port = report.failurePort { status("Affected port: \(port).\n") }
             if let systemError = report.failureSystemError { status("Socket error: \(systemError.rawValue).\n") }
             return 1
         }

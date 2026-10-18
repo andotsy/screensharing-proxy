@@ -18,7 +18,7 @@ guard let info = try PropertyListSerialization.propertyList(from: infoData, form
       let minimumSystemVersion = info["LSMinimumSystemVersion"] as? String,
       minimumSystemVersion.range(of: #"^[0-9]+(?:\.[0-9]+){0,2}$"#, options: .regularExpression) != nil else {
     throw NSError(domain: "ScreenSharingProxyPackaging", code: 2, userInfo: [
-        NSLocalizedDescriptionKey: "Screen Sharing Proxy's bundle version or minimum macOS version is missing or invalid."
+        NSLocalizedDescriptionKey: "Screen Sharing Rubyfier's bundle version or minimum macOS version is missing or invalid."
     ])
 }
 var osComponents = minimumSystemVersion.split(separator: ".")
@@ -63,8 +63,8 @@ for scale in [1, 2] {
     let dark = color(22, 42, 68)
     let muted = color(86, 108, 136)
     let blue = color(45, 109, 234)
-    text("SCREEN SHARING PROXY", x: 54, top: 28, w: 300, size: 12, weight: .bold, ink: blue)
-    text("Install Screen Sharing Proxy", x: 54, top: 53, w: 610, size: 32, weight: .bold, ink: dark)
+    text("SCREEN SHARING RUBYFIER", x: 54, top: 28, w: 300, size: 12, weight: .bold, ink: blue)
+    text("Install Screen Sharing Rubyfier", x: 54, top: 53, w: 610, size: 32, weight: .bold, ink: dark)
     text("Drag the app to Applications.", x: 55, top: 101, w: 600, size: 17, weight: .regular, ink: muted)
     text("v\(version)", x: 584, top: 29, w: 122, size: 12, weight: .medium,
          ink: muted, alignment: .right)

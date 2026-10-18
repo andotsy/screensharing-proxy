@@ -7,15 +7,18 @@ test "$(uname -s)" = Darwin
 test "$(uname -m)" = arm64
 test "$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)" = "$version"
 swift build -c release -Xswiftc -warnings-as-errors
-test "$(.build/release/ScreenSharingProxy --version)" = "Screen Sharing Proxy $version"
+test "$(.build/release/ScreenSharingProxy --version)" = "Screen Sharing Rubyfier $version"
 test "$(.build/release/screensharing-proxy-diagnose --version)" = "screensharing-proxy-diagnose $version"
 
-bundle=.build/native-bundle/ScreenSharingProxy.app
+bundle=".build/native-bundle/Screen Sharing Rubyfier.app"
 rm -rf .build/native-bundle
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" .build/AppIcon.iconset
 cp Packaging/Info.plist "$bundle/Contents/Info.plist"
 cp .build/release/ScreenSharingProxy .build/release/screensharing-proxy-diagnose "$bundle/Contents/MacOS/"
 cp -R .build/release/ScreenSharingProxy_ProxyCore.bundle "$bundle/Contents/Resources/"
+rm -rf .build/rubyfier-payload
+bash Packaging/build-rubied-patcher.sh .build/rubyfier-payload
+cp -R .build/rubyfier-payload "$bundle/Contents/Resources/Rubyfier"
 # Assets.car carries the light, dark and tinted icon appearances for macOS 26.
 xcrun actool "$PWD/Packaging/AppIcon.icon" --compile "$PWD/$bundle/Contents/Resources" \
     --platform macosx --minimum-deployment-target 14.0 --app-icon AppIcon \

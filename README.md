@@ -1,52 +1,34 @@
-# Screen Sharing Proxy
+# Screen Sharing Rubyfier
 
-A native macOS project investigating a viewer-side relay for Apple's High
-Performance Screen Sharing.
+A native macOS patcher investigating a system Ruby transport for Apple's High
+Performance Screen Sharing. This is an **unreleased local experiment**.
 
-**Native relay app prerelease: `v0.1.0-alpha.6`.** The Apple silicon DMG contains
-`ScreenSharingProxy.app`, the user-supplied icon, Applications shortcut and an
-offline guide. See [installation](docs/INSTALL.md) and [release notes](docs/releases/0.1.0-alpha.6.md).
+**Screen Sharing Rubyfier.app** creates **Screen Sharing Rubyfied.app** from the
+Apple viewer already installed on the controlling Mac. It bundles optool, a
+compiled transport library and Ruby scripts; applying the patch requires no Xcode,
+command line tools, Python or gems. The original app and system settings remain
+untouched. The copy keeps the native connection UI and authentication flow.
 
-On the **controlling Mac**, open **Proxy**, enter the remote IPv4 address and
-click **Connect**. The app starts the system Ruby relay, then opens Apple's
-Screen Sharing for authentication and mode selection. **Stop Relay** and quitting
-the app clean up the owned process. **Settings** contains optional port settings;
-**Diagnostics** retains one-click collection and private ZIP export. Session
-transport counters can be saved as JSON. The app has no ten-minute experiment cap.
+Click **Create Rubyfied App…** and choose a writable folder. Watch progress in the
+scrollable, selectable console, then open the created app and enter the sharing
+Mac's real IPv4 address. The copy offers to quit the original viewer if needed.
+See [installation](docs/INSTALL.md) and [patcher details](docs/RUBIED_PATCHER.md).
 
-**Performance remains experimental.** A user selected High Performance and
-confirmed video plus keyboard/mouse, but that attempt's counters show TCP-only
-forwarding with no UDP. The app reports observed transport without claiming
-verified high-performance media. Direct sharing may still be faster; operation
-under the restricted viewer's rules, audio and sustained stability remain unverified.
-The relay does not decode media, handle credentials or change network/display settings.
-See [the current handoff](docs/HANDOFF.md) for evidence and the [loopback guide](docs/LOOPBACK_EXPERIMENT_GUIDE.md)
-for the separate bounded command-line experiment.
+The current payload accepts the tested Screen Sharing executable from macOS
+26.7.1 (25G241), on Apple silicon. Other native builds fail the compatibility check.
+Local tests cover the native sign-in/reconnect UI, TCP and three bidirectional
+connected-loopback media channels through Apple's socket-dictionary handoff.
+Standard mode worked in the user's r3 test; High Performance showed a grey
+screen. R4 replaces the shared wildcard receiver with distinct connected native
+sockets and adds native first-frame/feedback diagnostics for the next live test.
+**Live High Performance video, input, performance and restricted-policy operation
+remain unverified.** Synthetic transport counters do not establish decoded media.
 
-Implemented:
-
-- Native app with Proxy, Settings and Diagnostics tabs. Owned relay start/stop,
-  private session reports, one-button diagnostics, automatic ZIP Save dialog and save retry.
-  No active Dock preference, login startup or background menu bar utility.
-- A read-only macOS diagnostic CLI: firewall entries, executable identities,
-  launchd manifest candidates, and correlated TCP/UDP socket snapshots.
-- Performance component evidence for the viewer, server, session agent and
-  `avconferenced`, including separate app/executable firewall rules, socket
-  delegation entitlements, binding categories and visible host UDP-base settings.
-- Ten socket snapshots per collection, including unattributed UDP sockets so no
-  remote IP entry is required. The ZIP includes diagnostics.json and README.txt.
-- Automatic discovery and selection of an explicitly allowed `proxyd`, including
-  checks for global overrides, missing executables and ambiguous candidates.
-- Bounded subprocess output, monotonic deadlines, cancellation, process-group
-  cleanup and exit-status preservation.
-- Bounded versioned backend event framing and a session lifecycle that rejects
-  stale generations and waits for process exit before allowing another start.
-- Tests for failures, races, parsing and default report redaction.
-
-GitHub Actions runs the macOS build/tests on pushes to `main`. Version tags run
-the native app DMG workflow, verify the mounted app, launch it, exercise discovery/export and offline commands,
-and publish a prerelease only after the uploaded checksums pass. Published assets
-are never replaced under an existing version.
+The app retains private diagnostics with one-click collection and ZIP export.
+The original icon and DMG layout are preserved. Build the local patcher with
+`bash Packaging/build-app.sh`; versioned DMG packaging uses
+`SSP_VERSION=0.1.0-alpha.6 bash Packaging/build-app-dmg.sh`. These commands do not
+publish a release. Existing tags and published assets must never be replaced.
 
 On the **viewer Mac**, using Swift 6.2+ / Xcode 26.2, automatically find the allowed
 `proxyd` without supplying its path:

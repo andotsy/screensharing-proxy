@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Screen Sharing Proxy — installation</title>
+<title>Screen Sharing Rubyfier — installation</title>
 <style>
 :root{color-scheme:light dark;font-family:system-ui,sans-serif;line-height:1.55}
 body{max-width:780px;margin:48px auto;padding:0 24px}h1{line-height:1.15}
@@ -10,39 +10,43 @@ body{max-width:780px;margin:48px auto;padding:0 24px}h1{line-height:1.15}
 pre{overflow:auto;padding:16px;border:1px solid #728b9e;border-radius:12px;font-size:13px}
 button{font:inherit;padding:6px 14px;border-radius:8px;cursor:pointer}a{color:inherit}
 </style>
-<h1>Screen Sharing Proxy</h1>
-<p>Native app alpha · Apple silicon · macOS 14+</p>
-<p class="notice">This alpha adds the <strong>Proxy</strong> tab: connect through the system Ruby relay,
-open Apple’s Screen Sharing, and stop the relay from the app. Performance is experimental;
-a working connection does not establish that the high-performance UDP path is active.</p>
-<h2>Install and connect</h2>
-<ol><li>Drag <strong>ScreenSharingProxy.app</strong> onto <strong>Applications</strong>.</li>
-<li>Open the app on the <strong>controlling Mac</strong>. Quit any existing Screen Sharing session.</li>
-<li>Enter the remote Mac’s IPv4 address in <strong>Proxy</strong>, then click <strong>Connect</strong>.</li>
-<li>Sign in in Apple’s Screen Sharing window and select High Performance when offered.</li>
-<li>Keep this app open while sharing. Click <strong>Stop Relay</strong> when finished.</li></ol>
-<p>The app has no ten-minute experiment cutoff. Closing its window quits and stops its owned relay.
-After the last TCP connection closes, the relay permits reconnection for two minutes.</p>
-<p><strong>Settings</strong> contains optional TCP and UDP port settings. The defaults are suitable
-for a normally configured remote Mac. No firewall, interface, route or display settings are changed.</p>
-<p>The transport display distinguishes TCP-only traffic from TCP and UDP. A TCP-only connection
-may be slower. Counters show socket submissions, not verified video decoding or input delivery.
-The restricted viewer’s network rules have not yet been validated.</p>
-<h2>Reports</h2>
-<p><strong>Save Session Report…</strong> exports transport counters and fixed error labels as JSON.
-For system evidence, open <strong>Diagnostics</strong> and click <strong>Collect Diagnostics</strong>.
-Choose where to save the ZIP; cancelling preserves it for <strong>Save ZIP Again…</strong>.</p>
-<p>No Xcode, Python or gems are needed. The app uses macOS’s system Ruby.</p>
+<h1>Screen Sharing Rubyfier</h1>
+<p>Local experimental build · Apple silicon</p>
+<p class="notice">Adds our Ruby relay to a separate copy of Screen Sharing.
+Your original app stays untouched. This build accepts the tested Screen Sharing
+executable from macOS 26.7.1 (25G241). Live High Performance operation remains unverified.</p>
+<h2>Create your app</h2>
+<ol><li>Drag <strong>Screen Sharing Rubyfier.app</strong> onto <strong>Applications</strong>.</li>
+<li>On the <strong>controlling Mac</strong>, open Rubyfier and click <strong>Create Rubyfied App…</strong>.
+Choose a writable folder, such as your user Applications folder.</li>
+<li>Open <strong>Screen Sharing Rubyfied.app</strong>. If the original viewer is open,
+the copy offers to quit it; this disconnects its viewer sessions.</li>
+<li>Enter the remote Mac’s <strong>real IPv4 address</strong> in the native connection window.
+Authenticate normally and choose High Performance when offered. Do not enter 127.0.0.1 or port 15900.</li>
+<li>Quit Rubyfied to stop its relay. Quit and reopen before changing hosts or retrying a failed relay.</li></ol>
+<p>The patcher bundles optool, the compiled library and relay scripts. No Xcode,
+command line tools, Python or gems need to be installed. An existing Rubyfied app
+is never overwritten. No network or sharing-service settings are changed.</p>
+<p>Rubyfier can be closed after creation. Its console is scrollable, read-only and
+selectable; <strong>Copy All</strong> copies the log.</p>
+<h2>Reports and validation</h2>
+<p><strong>Diagnostics → Collect Diagnostics</strong> collects a ZIP and opens a save dialog.
+Rubyfied writes private transport counters to
+<code>~/Library/Logs/Screen Sharing Rubyfied/latest-session.json</code>.</p>
+<p>Local tests passed for native UI launch, a synthetic TCP handshake and three
+bidirectional native UDP channels. These checks do not establish live video,
+keyboard/mouse, performance or receiving permission under restricted network rules.</p>
 <h2>If macOS blocks the app</h2>
-<p>This alpha is ad hoc signed and not notarized. After installing it in
+<p>This build is ad hoc signed and not notarized. After installing it in
 Applications, open the included Terminal shortcut and paste the command below.
-It verifies the app identity and signature, removes quarantine only from that
-app, and opens it. Use it only for a download you trust.</p>
+It verifies the bundle identity and signature, removes quarantine only from that
+app, and opens it. Use it only for a download you trust. An ad hoc signature
+checks integrity, not publisher identity.</p>
 <button id="copy" type="button">Copy command</button>
 <span id="copy-status" role="status"></span>
 <pre><code id="launch-command">(
 set -eu
-app=&#x27;/Applications/ScreenSharingProxy.app&#x27;
+app=&#x27;/Applications/Screen Sharing Rubyfier.app&#x27;
 test &quot;$(/usr/libexec/PlistBuddy -c &#x27;Print :CFBundleIdentifier&#x27; &quot;$app/Contents/Info.plist&quot;)&quot; = com.andotsy.screensharing-proxy
 /usr/bin/codesign --verify --deep --strict &quot;$app&quot;
 /usr/bin/codesign --display --verbose=2 &quot;$app&quot; 2&gt;&amp;1 | /usr/bin/grep -Fx &#x27;Identifier=com.andotsy.screensharing-proxy&#x27; &gt;/dev/null
@@ -50,15 +54,9 @@ test &quot;$(/usr/libexec/PlistBuddy -c &#x27;Print :CFBundleIdentifier&#x27; &q
 /usr/bin/open &quot;$app&quot;
 )</code></pre>
 <h2>Privacy and integrity</h2>
-<p>Private addresses and non-system paths are redacted by default. Reports retain
-system executable paths, ports, process IDs and service/signing identifiers.
-No packet contents, passwords or process environments are collected. Saved files
-have owner-only permissions. Review a report before sharing it.</p>
-<p>An unknown, blocked or ambiguous discovery is reported as such. An allow entry
-does not establish a forwarding API or permission from other network filters.</p>
-<p>Release assets include <code>SHA256SUMS</code> for download integrity checks.
-The CLI is included inside the app at
-<code>Contents/MacOS/screensharing-proxy-diagnose</code>.</p>
+<p>Shared diagnostics redact private addresses and non-system paths by default.
+Our reports exclude credentials, media keys and packet contents. Review reports
+before sharing them. The accompanying SHA256SUMS checks download integrity.</p>
 <script>
 document.getElementById('copy').addEventListener('click',async()=>{
  const code=document.getElementById('launch-command');

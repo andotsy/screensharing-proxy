@@ -1,37 +1,46 @@
-# Install Screen Sharing Proxy
+# Install Screen Sharing Rubyfier
 
-Download `ScreenSharingProxy-v0.1.0-alpha.6-macOS-arm64.dmg` from the
-[prerelease](https://github.com/andotsy/screensharing-proxy/releases/tag/v0.1.0-alpha.6).
-Requires Apple silicon and macOS 14+. No Xcode or Python installation is needed.
+This repository provides a local experimental patcher for Apple silicon.
+It is not a published or CI-validated Rubyfier release. The patcher window runs
+on macOS 14+, but creating Rubyfied currently requires the exact tested Screen
+Sharing executable from macOS 26.7.1 (25G241). Other native builds are refused.
 
-1. Open the DMG and drag **ScreenSharingProxy.app** onto **Applications**.
-2. Open the app on the **controlling/viewer Mac**. Quit its existing Screen Sharing session.
-3. In **Proxy**, enter the remote Mac's IPv4 address and click **Connect**.
-4. Sign in in Apple's Screen Sharing window and select High Performance when offered.
-5. Keep this app open while sharing. **Stop Relay** or quitting the app stops its owned Ruby process.
+1. Open the DMG and drag **Screen Sharing Rubyfier.app** onto **Applications**.
+2. Open Rubyfier on the **controlling Mac**. Click **Create Rubyfied App…** and
+   choose a writable folder. Your user Applications folder avoids admin access.
+3. Open the resulting **Screen Sharing Rubyfied.app**. If the original viewer is
+   running, the copy offers to quit it; doing so disconnects its viewer sessions.
+4. Enter the remote Mac's **real IPv4 address** in the native connection window,
+   authenticate normally and choose High Performance when offered. Do not enter
+   a loopback address or port 15900.
+5. Quit Rubyfied to stop its relay. Quit and reopen before switching hosts or
+   retrying after a relay failure. Rubyfier itself can be closed after creation.
 
-**Proxy, Settings and Diagnostics are available in this first relay app alpha.**
-There is no ten-minute session limit; an idle gap after TCP closes ends after two
-minutes. Settings exposes optional local/remote TCP and UDP media-base ports.
-No firewall, interface, route, display or system-service configuration is changed.
+The patcher bundles optool, the compiled transport library and relay scripts.
+No Xcode, command line tools, Python or gems need to be installed. It uses system
+Ruby and codesign, modifies only the new app copy, and never overwrites an
+existing copy. No interface, route, firewall or sharing-service setting changes.
 
-The app shows **TCP only** when no UDP has passed through Ruby. A working screen
-with that label does not prove Apple's UDP high-performance media path, and can
-be slower than a direct connection. The restricted viewer's rules remain untested.
+The console is scrollable, read-only and selectable, with a **Copy All** button.
+**Diagnostics** retains the one-click collection and automatic ZIP save dialog.
+Rubyfied writes private transport counters to
+`~/Library/Logs/Screen Sharing Rubyfied/latest-session.json`.
 
-**Save Session Report…** exports private transport counters as JSON. **Diagnostics**
-retains the one-click collection and automatic ZIP save dialog; **Save ZIP Again…**
-reuses a completed collection. Reports exclude credentials and packet contents.
+Native UI launch, a synthetic TCP handshake and three bidirectional native UDP
+channels passed local tests. **Live High Performance video, input, performance
+and operation under restricted network rules are not yet verified.**
 
-The app is ad hoc signed and not notarized. If macOS blocks opening the downloaded
-app, open the included Terminal shortcut and run this command after installing
-it in Applications. It checks the app identity and signature, removes quarantine
-only from that app, then opens it:
+## If macOS blocks the app
+
+This build is ad hoc signed and not notarized. For a download you trust, open the
+included Terminal shortcut and run this command after installing it in Applications.
+It verifies the bundle identity and signature, removes quarantine only from that
+app, then opens it. An ad hoc signature checks integrity, not publisher identity.
 
 ```sh
 (
 set -eu
-app='/Applications/ScreenSharingProxy.app'
+app='/Applications/Screen Sharing Rubyfier.app'
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = com.andotsy.screensharing-proxy
 /usr/bin/codesign --verify --deep --strict "$app"
 /usr/bin/codesign --display --verbose=2 "$app" 2>&1 | /usr/bin/grep -Fx 'Identifier=com.andotsy.screensharing-proxy' >/dev/null
@@ -40,11 +49,9 @@ test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/In
 )
 ```
 
-Do not run the command on an untrusted download. `SHA256SUMS` is published beside
-the DMG; run `shasum -a 256 -c SHA256SUMS` with both files in one directory to check
-the download before mounting it.
+Use the accompanying SHA256SUMS to check the archive before opening it:
+`shasum -a 256 -c SHA256SUMS` with both files in the same folder.
 
-The CLI is also included at
-`/Applications/ScreenSharingProxy.app/Contents/MacOS/screensharing-proxy-diagnose`.
-See [diagnostics](DIAGNOSTICS.md) for its options and report visibility limits.
-The older `v0.1.0-alpha.1` release contains only the standalone diagnostic CLI.
+The CLI is included at
+`/Applications/Screen Sharing Rubyfier.app/Contents/MacOS/screensharing-proxy-diagnose`.
+See [diagnostics](DIAGNOSTICS.md) and the [patcher notes](RUBIED_PATCHER.md).

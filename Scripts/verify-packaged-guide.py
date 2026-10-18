@@ -39,11 +39,11 @@ def main():
     assert parser.blocks == 1
     snippet = "".join(parser.parts).strip()
     assert snippet in Path("docs/INSTALL.md").read_text()
-    app_literal = "'/Applications/ScreenSharingProxy.app'"
+    app_literal = "'/Applications/Screen Sharing Rubyfier.app'"
     assert snippet.count(app_literal) == 1
     with tempfile.TemporaryDirectory(prefix="ssp-guide-") as temporary:
         root = Path(temporary)
-        app = root / "Applications with spaces/ScreenSharingProxy.app"
+        app = root / "Applications with spaces/Screen Sharing Rubyfier.app"
         app.parent.mkdir()
         subprocess.run(["/usr/bin/ditto", str(volume / app.name), str(app)], check=True)
         subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)

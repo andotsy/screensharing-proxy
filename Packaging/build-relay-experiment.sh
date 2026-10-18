@@ -24,6 +24,9 @@ cp .build/release/screensharing-proxy-experiment "$destination/"
 cp -R .build/release/ScreenSharingProxy_ProxyCore.bundle "$destination/"
 cp "$launcher" "$destination/Run.command"
 cp "$guide" "$destination/README.md"
+if [[ "${1:-incoming}" == loopback ]]; then
+    cp docs/NATIVE_LOCAL_TARGET_FINDINGS.md "$destination/"
+fi
 git rev-parse HEAD > "$destination/SOURCE_COMMIT.txt"
 if test -n "$(git status --porcelain)"; then
     printf 'Includes uncommitted working-tree changes.\n' >> "$destination/SOURCE_COMMIT.txt"

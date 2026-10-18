@@ -6,6 +6,26 @@ import Testing
 struct BoundedCommandTests {
     let runner = BoundedCommandRunner()
 
+    @Test func streamsBoundedOutputBeforeProcessExits() async {
+        let (stream, continuation) = AsyncStream<Data>.makeStream()
+        let streaming = BoundedCommandRunner { bytes, _ in continuation.yield(bytes) }
+        let process = Task {
+            let result = await streaming.run(CommandSpec("/bin/sh", ["-c", "printf ready; sleep 10"], timeout: 15))
+            continuation.finish()
+            return result
+        }
+        var received = Data()
+        for await bytes in stream {
+            received.append(bytes)
+            if received.count >= 5 { break }
+        }
+        process.cancel()
+        let result = await process.value
+        #expect(String(decoding: received, as: UTF8.self) == "ready")
+        #expect(result.outcome == .cancelled)
+        #expect(result.durationMilliseconds < 4_000)
+    }
+
     @Test func preservesExitAndBothStreams() async {
         let result = await runner.run(CommandSpec("/bin/sh", ["-c", "printf out; printf err >&2; exit 7"]))
         #expect(result.outcome == .exited)
