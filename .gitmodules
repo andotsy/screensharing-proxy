@@ -1,0 +1,3 @@
+[submodule "ThirdParty/optool"]
+	path = ThirdParty/optool
+	url = https://github.com/andotsy/optool.git

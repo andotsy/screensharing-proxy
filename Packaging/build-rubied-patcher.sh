@@ -3,6 +3,11 @@ set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 destination=${1:?Supply a new output folder}
 test ! -e "$destination"
+if [[ ! -f ThirdParty/optool/optool/operations.m ||
+      ! -f ThirdParty/optool/optool/FSArgumentParser/ArgumentParser/XPMArgumentParser.m ]]; then
+    printf 'Missing optool dependencies. Run: git submodule update --init --recursive\n' >&2
+    exit 1
+fi
 mkdir -p "$destination/Payload/Relay"
 clang -arch arm64e -dynamiclib -fobjc-arc -Wall -Wextra -Werror \
     -framework Foundation -framework AppKit -framework QuartzCore Sources/Rubied/RubiedTransport.m \

@@ -17,6 +17,7 @@ firewall rules, network interfaces or loopback aliases. Keep unverified behavior
 (other macOS builds, a firewall that actually blocks Screen Sharing) described as
 unverified.
 
+Initialize pinned dependencies with `git submodule update --init --recursive`.
 Use Swift 6.2+; run `swift test -Xswiftc -warnings-as-errors`,
 `bash Packaging/build-app.sh`, and the `Scripts/test-*.py` checks CI runs.
 Screen Sharing behavior requires explicit testing on a Mac.

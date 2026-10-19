@@ -34,6 +34,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref_name }}
           persist-credentials: false
+          submodules: recursive
           fetch-depth: 0
 
       - name: Validate tag and toolchain

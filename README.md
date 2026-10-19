@@ -59,9 +59,15 @@ update an existing viewer.
 You need an Apple silicon Mac with Xcode 26.
 
 ```sh
+git clone --recurse-submodules https://github.com/andotsy/screensharing-rubyfier.git
+cd screensharing-rubyfier
 bash Packaging/build-app.sh                         # app in .build/native-bundle/
 SSP_VERSION=1.1.1 bash Packaging/build-app-dmg.sh   # DMG in dist/
 ```
+
+For an existing checkout, run `git submodule update --init --recursive` first.
+This fetches the pinned [optool fork](https://github.com/andotsy/optool) and its
+ArgumentParser dependency. The released patcher already includes the compiled tool.
 
 Tests:
 

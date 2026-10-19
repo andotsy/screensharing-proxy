@@ -143,8 +143,9 @@ to exercise that lifecycle without the system viewer or real credentials.
 
 `bash Packaging/build-app.sh` builds **Screen Sharing Rubyfier.app** in
 `.build/native-bundle/`. `Packaging/build-rubied-patcher.sh` builds its payload.
-The bundled optool and ArgumentParser sources, revisions, licenses and local
-padding corrections are documented in `ThirdParty/optool/PROVENANCE.md`.
+Initialize the pinned optool and nested ArgumentParser submodules with
+`git submodule update --init --recursive` before building. Their source revisions,
+licenses and the fork's padding fixes are documented in `ThirdParty/optool.md`.
 Only the copied executable receives a load command; the launcher does not rely
 on `DYLD_INSERT_LIBRARIES`.
 
