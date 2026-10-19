@@ -40,19 +40,12 @@ The app is ad hoc signed, not notarized. If macOS won't open it, see
 
 - Apple silicon only.
 - Tested with Screen Sharing from macOS 26.7.1 (25G241). High Performance video,
-  audio and keyboard/mouse control work there.
+  audio, keyboard/mouse control and Dynamic Resolution work there.
 - On other macOS versions the patcher still runs and tells you the build is
   untested. If Apple changed the parts the copy hooks into, the copy quits when
   you open it.
 - Not yet tested on a Mac where the firewall actually blocks Screen Sharing.
 - After a macOS update, create a new copy.
-
-## Updating to 1.1.1
-
-Version **1.1.1** fixes disconnections when the remote display resolution changes.
-Dynamic Resolution and SharpShare resizing passed a live test on macOS 26.7.1.
-**Create a new Rubyfied app to get the fix**; updating the patcher alone does not
-update an existing viewer.
 
 ## Building from source
 
