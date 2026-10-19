@@ -7,13 +7,13 @@ test "$(uname -s)" = Darwin
 test "$(uname -m)" = arm64
 test "$(/usr/libexec/PlistBuddy -c 'Print :SSPReleaseVersion' Packaging/Info.plist)" = "$version"
 swift build -c release -Xswiftc -warnings-as-errors
-test "$(.build/release/ScreenSharingProxy --version)" = "Screen Sharing Rubyfier $version"
+test "$(.build/release/ScreenSharingRubyfier --version)" = "Screen Sharing Rubyfier $version"
 
 bundle=".build/native-bundle/Screen Sharing Rubyfier.app"
 rm -rf .build/native-bundle
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" .build/AppIcon.iconset
 cp Packaging/Info.plist "$bundle/Contents/Info.plist"
-cp .build/release/ScreenSharingProxy "$bundle/Contents/MacOS/"
+cp .build/release/ScreenSharingRubyfier "$bundle/Contents/MacOS/"
 rm -rf .build/rubyfier-payload
 bash Packaging/build-rubied-patcher.sh .build/rubyfier-payload
 cp -R .build/rubyfier-payload "$bundle/Contents/Resources/Rubyfier"
@@ -26,8 +26,8 @@ test -s "$bundle/Contents/Resources/Assets.car"
 swift Packaging/app-icon.swift "$bundle" .build/AppIcon.iconset
 iconutil -c icns .build/AppIcon.iconset -o "$bundle/Contents/Resources/AppIcon.icns"
 plutil -lint "$bundle/Contents/Info.plist"
-test "$(lipo -archs "$bundle/Contents/MacOS/ScreenSharingProxy")" = arm64
-test "$(xcrun vtool -show-build "$bundle/Contents/MacOS/ScreenSharingProxy" | awk '$1 == "minos" { print $2 }')" = 14.0
+test "$(lipo -archs "$bundle/Contents/MacOS/ScreenSharingRubyfier")" = arm64
+test "$(xcrun vtool -show-build "$bundle/Contents/MacOS/ScreenSharingRubyfier" | awk '$1 == "minos" { print $2 }')" = 14.0
 codesign --force --sign - "$bundle"
 codesign --verify --deep --strict "$bundle"
 printf 'Built %s\n' "$bundle"

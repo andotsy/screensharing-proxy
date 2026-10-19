@@ -47,10 +47,12 @@ The app is ad hoc signed, not notarized. If macOS won't open it, see
 - Not yet tested on a Mac where the firewall actually blocks Screen Sharing.
 - After a macOS update, create a new copy.
 
-## Known issues
+## Updating to 1.1.1
 
-- Turning on **Dynamic Resolution** during a High Performance session corrupts
-  the stream right away and the connection closes. Leave it off for now.
+Version **1.1.1** fixes disconnections when the remote display resolution changes.
+Dynamic Resolution and SharpShare resizing passed a live test on macOS 26.7.1.
+**Create a new Rubyfied app to get the fix**; updating the patcher alone does not
+update an existing viewer.
 
 ## Building from source
 
@@ -58,7 +60,7 @@ You need an Apple silicon Mac with Xcode 26.
 
 ```sh
 bash Packaging/build-app.sh                         # app in .build/native-bundle/
-SSP_VERSION=1.1.0 bash Packaging/build-app-dmg.sh   # DMG in dist/
+SSP_VERSION=1.1.1 bash Packaging/build-app-dmg.sh   # DMG in dist/
 ```
 
 Tests:

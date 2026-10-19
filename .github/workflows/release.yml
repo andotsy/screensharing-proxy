@@ -67,7 +67,7 @@ jobs:
           trap 'hdiutil detach "$mount_path"' EXIT
           app="$mount_path/Screen Sharing Rubyfier.app"
           python3 Scripts/smoke-app.py "$app"
-          test "$(lipo -archs "$app/Contents/MacOS/ScreenSharingProxy")" = arm64
+          test "$(lipo -archs "$app/Contents/MacOS/ScreenSharingRubyfier")" = arm64
           test -L "$mount_path/Applications"
           test "$(readlink "$mount_path/Applications")" = /Applications
           test -L "$mount_path/Terminal"

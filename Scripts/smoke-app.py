@@ -23,7 +23,7 @@ def main():
                  "Payload/Relay/relay.rb", "Payload/compatibility.json",
                  "Licenses/optool.txt", "Licenses/ArgumentParser.md"]:
         assert (payload / name).stat().st_size > 0, name
-    binary = bundle / "Contents/MacOS/ScreenSharingProxy"
+    binary = bundle / "Contents/MacOS/ScreenSharingRubyfier"
     version = subprocess.run([str(binary), "--version"], capture_output=True, text=True, check=True)
     assert version.stdout.strip() == "Screen Sharing Rubyfier " + info["SSPReleaseVersion"]
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
@@ -57,7 +57,13 @@ def main():
         assert process.returncode == 0, stdout + stderr
         assert "Native window, console, minimum size and bundled patcher passed." in stdout
         assert marker.read_text() == f"Screen Sharing Rubyfier {info['SSPReleaseVersion']} window ready\n"
-    print("Native window, bundled patcher, resources and signature passed.")
+        created = Path(temporary) / "created"
+        created.mkdir()
+        patch = subprocess.run([str(binary), "--patch-smoke-test", str(created)],
+                               capture_output=True, text=True, timeout=130)
+        assert patch.returncode == 0, patch.stdout + patch.stderr
+        assert "three bidirectional native UDP channels passed." in patch.stdout
+    print("Native window, patch creation, socket handoffs, resources and signature passed.")
 
 
 if __name__ == "__main__":

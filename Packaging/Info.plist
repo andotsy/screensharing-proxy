@@ -4,13 +4,13 @@
     <key>CFBundleIdentifier</key><string>com.andotsy.screensharing-proxy</string>
     <key>CFBundleName</key><string>Screen Sharing Rubyfier</string>
     <key>CFBundleDisplayName</key><string>Screen Sharing Rubyfier</string>
-    <key>CFBundleExecutable</key><string>ScreenSharingProxy</string>
+    <key>CFBundleExecutable</key><string>ScreenSharingRubyfier</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIconName</key><string>AppIcon</string>
-    <key>CFBundleShortVersionString</key><string>1.1.0</string>
-    <key>CFBundleVersion</key><string>110</string>
-    <key>SSPReleaseVersion</key><string>1.1.0</string>
+    <key>CFBundleShortVersionString</key><string>1.1.1</string>
+    <key>CFBundleVersion</key><string>111</string>
+    <key>SSPReleaseVersion</key><string>1.1.1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>

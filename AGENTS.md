@@ -6,7 +6,7 @@ isolated checkout, not an additional Git worktree. Do not publish names, links,
 commit identifiers or documentation copied from private reference projects.
 
 The repository contains only the Rubyfier patcher: the native app
-(`Sources/ScreenSharingProxy`, `ProxyAppSupport`, `ProxyCore`), the transport
+(`Sources/ScreenSharingRubyfier`, `ProxyAppSupport`, `ProxyCore`), the transport
 library and launcher (`Sources/Rubied`), the Ruby relay (`Sources/Rubied/Relay`)
 and the runtime patcher (`Packaging/Rubied`). Read `README.md` and
 `docs/RUBIED_PATCHER.md` first.

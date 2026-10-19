@@ -1,6 +1,6 @@
 # Install Screen Sharing Rubyfier
 
-Screen Sharing Rubyfier 1.1.0 is available for Apple silicon. The patcher window runs
+Screen Sharing Rubyfier 1.1.1 is available for Apple silicon. The patcher window runs
 on macOS 14+ and creates Rubyfied from any installed Screen Sharing build, but it
 has only been tested with the Screen Sharing executable from macOS 26.7.1 (25G241).
 

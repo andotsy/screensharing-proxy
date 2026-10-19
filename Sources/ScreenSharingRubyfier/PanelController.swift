@@ -10,7 +10,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         window?.isVisible == true && (window?.contentView?.bounds.width ?? 0) >= 560
     }
     var hasUsableConsoleAndMinimumSize: Bool {
-        guard let window, window.contentMinSize.width >= 680, window.contentMinSize.height >= 620,
+        guard let window, window.contentMinSize.width >= RubyfierWindow.minimumContentSize.width,
+              window.contentMinSize.height >= RubyfierWindow.minimumContentSize.height,
               let root = window.contentView else { return false }
         var views = [root]
         while let view = views.popLast() {
@@ -27,13 +28,13 @@ final class PanelController: NSObject, NSWindowDelegate {
             // AppKit owns these constraints. Hosting's automatic sizing otherwise
             // resets the minimum after asynchronous SwiftUI layout updates.
             content.sizingOptions = []
-            let panel = RubyfierWindow(contentRect: NSRect(x: 0, y: 0, width: 740, height: 680),
+            let panel = RubyfierWindow(contentRect: NSRect(origin: .zero, size: RubyfierWindow.initialContentSize),
                                  styleMask: [.titled, .closable, .resizable, .miniaturizable],
                                  backing: .buffered, defer: false)
             panel.contentView = content
             panel.title = "Screen Sharing Rubyfier"
-            panel.contentMinSize = NSSize(width: 680, height: 620)
-            panel.setContentSize(NSSize(width: 740, height: 680))
+            panel.contentMinSize = RubyfierWindow.minimumContentSize
+            panel.setContentSize(RubyfierWindow.initialContentSize)
             panel.isReleasedWhenClosed = false
             panel.isOpaque = false
             panel.backgroundColor = .clear
@@ -45,7 +46,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         NSApp.activate()
     }
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        let minimum = sender.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 680, height: 620)).size
+        let minimum = sender.frameRect(forContentRect: NSRect(origin: .zero, size: RubyfierWindow.minimumContentSize)).size
         return NSSize(width: max(frameSize.width, minimum.width), height: max(frameSize.height, minimum.height))
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {

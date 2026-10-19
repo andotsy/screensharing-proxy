@@ -8,7 +8,7 @@ struct RubyfierPane: View {
     @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 9) {
                 Text("Screen Sharing, Rubyfied.").font(.title2.weight(.semibold))
                 Text("Adds our Ruby relay to a separate copy of Screen Sharing. Your original app stays untouched.")
@@ -36,19 +36,17 @@ struct RubyfierPane: View {
                     Label("Console", systemImage: "terminal")
                     Spacer()
                     Button(action: copyConsole) {
-                        Text("Copy All")
-                            .overlay(alignment: .trailing) {
-                                // Use the existing trailing gutter for feedback,
-                                // keeping the label and button bounds stationary.
+                        HStack(spacing: 5) {
+                            Text("Copy All")
+                            if copied {
                                 Image(systemName: "checkmark")
-                                    .offset(x: 14)
-                                    .opacity(copied ? 1 : 0)
                                     .accessibilityHidden(true)
-                                    .allowsHitTesting(false)
                             }
+                        }
                     }
                     .disabled(model.consoleText.isEmpty)
                     .buttonStyle(ConsoleCopyButtonStyle())
+                    .animation(.easeInOut(duration: 0.15), value: copied)
                     .accessibilityLabel(copied ? "Copy All, copied" : "Copy All")
                     .task(id: copyConfirmation) {
                         guard copyConfirmation > 0 else { return }
@@ -60,7 +58,7 @@ struct RubyfierPane: View {
                 .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 10)
                 Divider()
                 PatchConsole(text: model.consoleText.isEmpty ? "Patch activity will appear here.\n" : model.consoleText)
-                    .frame(minHeight: 190, maxHeight: .infinity)
+                    .frame(minHeight: 140, maxHeight: .infinity)
             }
             .background(.background.secondary, in: .rect(cornerRadius: 10))
             .clipShape(.rect(cornerRadius: 10))

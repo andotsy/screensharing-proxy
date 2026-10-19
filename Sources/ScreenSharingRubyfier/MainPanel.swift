@@ -16,6 +16,6 @@ struct MainPanel: View {
                 .padding(.horizontal, 24).padding(.vertical, 14)
         }
         .background { WindowMaterial().allowsHitTesting(false).accessibilityHidden(true) }
-        .frame(minWidth: 680, minHeight: 620)
+        .frame(minWidth: RubyfierWindow.minimumContentSize.width, minHeight: RubyfierWindow.minimumContentSize.height)
     }
 }

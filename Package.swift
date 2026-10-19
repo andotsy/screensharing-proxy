@@ -11,13 +11,13 @@ var targets: [Target] = [
     .testTarget(name: "ProxyCoreTests", dependencies: ["ProxyCore"]),
 ]
 #if os(macOS)
-products.append(.executable(name: "ScreenSharingProxy", targets: ["ScreenSharingProxy"]))
-targets.append(.executableTarget(name: "ScreenSharingProxy", dependencies: ["ProxyCore", "ProxyAppSupport"],
+products.append(.executable(name: "ScreenSharingRubyfier", targets: ["ScreenSharingRubyfier"]))
+targets.append(.executableTarget(name: "ScreenSharingRubyfier", dependencies: ["ProxyCore", "ProxyAppSupport"],
     swiftSettings: [.defaultIsolation(MainActor.self)]))
 #endif
 
 let package = Package(
-    name: "ScreenSharingProxy",
+    name: "ScreenSharingRubyfier",
     platforms: [.macOS(.v14)],
     products: products,
     targets: targets

@@ -44,7 +44,7 @@ def main():
         app = root / "Applications with spaces/Screen Sharing Rubyfier.app"
         app.parent.mkdir()
         subprocess.run(["/usr/bin/ditto", str(volume / app.name), str(app)], check=True)
-        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
+        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingRubyfier packaging test;", str(app)], check=True)
         marker = root / "window-ready.txt"
         command = snippet.replace(app_literal, shlex.quote(str(app)))
         # Keep the guide's launch command, with a test-only argument so the
@@ -68,7 +68,7 @@ def main():
         info["CFBundleIdentifier"] = "com.andotsy.packaging.unrelated"
         plist.write_bytes(plistlib.dumps(info))
         subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", "--identifier", info["CFBundleIdentifier"], str(app)], check=True)
-        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingProxy packaging test;", str(app)], check=True)
+        subprocess.run(["/usr/bin/xattr", "-w", "com.apple.quarantine", "0081;00000000;ScreenSharingRubyfier packaging test;", str(app)], check=True)
         unrelated = subprocess.run(["/bin/zsh", str(script)], capture_output=True, timeout=30)
         assert unrelated.returncode != 0
         subprocess.run(["/usr/bin/xattr", "-p", "com.apple.quarantine", str(app)], check=True, capture_output=True)

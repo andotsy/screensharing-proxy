@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard result.complete, text.contains("nativeUILaunched=1"),
                       text.contains("originalAddressPreserved=1"),
                       text.contains("connectedMediaSocketDictionaries=3"),
+                      text.contains("mediaSocketHandoffs=9"),
                       text.contains("nativeSocketConflictRefused=1"),
                       text.contains("tcpAndThreeNativeUDPChannels=1") else {
                     FileHandle.standardError.write(result.errorOutput)

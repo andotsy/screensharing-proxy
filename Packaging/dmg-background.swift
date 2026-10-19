@@ -4,7 +4,7 @@ import AppKit
 let width: CGFloat = 760
 let height: CGFloat = 560
 guard CommandLine.arguments.count == 3 else {
-    throw NSError(domain: "ScreenSharingProxyPackaging", code: 1, userInfo: [
+    throw NSError(domain: "ScreenSharingRubyfierPackaging", code: 1, userInfo: [
         NSLocalizedDescriptionKey: "Usage: dmg-background.swift OUTPUT_PREFIX APP_BUNDLE"
     ])
 }
@@ -17,7 +17,7 @@ guard let info = try PropertyListSerialization.propertyList(from: infoData, form
       version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$"#, options: .regularExpression) != nil,
       let minimumSystemVersion = info["LSMinimumSystemVersion"] as? String,
       minimumSystemVersion.range(of: #"^[0-9]+(?:\.[0-9]+){0,2}$"#, options: .regularExpression) != nil else {
-    throw NSError(domain: "ScreenSharingProxyPackaging", code: 2, userInfo: [
+    throw NSError(domain: "ScreenSharingRubyfierPackaging", code: 2, userInfo: [
         NSLocalizedDescriptionKey: "Screen Sharing Rubyfier's bundle version or minimum macOS version is missing or invalid."
     ])
 }

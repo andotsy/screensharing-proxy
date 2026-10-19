@@ -32,7 +32,7 @@ static int connectFixture(uint16_t port) {
 int main(void) { @autoreleasepool {
     alarm(25);
     probeMode = YES;
-    report = [@{@"schemaVersion":@5, @"transportRevision":@6} mutableCopy];
+    report = [@{@"schemaVersion":@5, @"transportRevision":@7} mutableCopy];
     pendingEvents = [NSMutableData data];
     eventQueue = dispatch_queue_create("rubyfied.retry-fixture", DISPATCH_QUEUE_SERIAL);
     int route = socket(AF_INET, SOCK_DGRAM, 0);

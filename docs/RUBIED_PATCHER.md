@@ -70,7 +70,17 @@ Apple receives the reverse connected loopback socket. There is no wildcard
 native receiver or duplicate-tuple connect failure, and the native socket can
 send feedback with `send`, without a supplied destination. IPv4-mapped loopback
 configuration is normalized to match the actual socket. Conflicting native
-ports fail explicitly instead of sharing packets between receivers.
+ports owned by unrelated sockets fail explicitly. Each relay channel retains
+one exclusive connected native socket; replacement streams receive close-on-exec
+duplicates of that socket, preserving its receive queue. The adapter retains at
+most three descriptors and closes them when the relay exits or is stopped.
+
+Resolution changes replace AVC streams before the previous stream's socket is
+released. Rebinding the same native port in 1.1.0 fails with `EADDRINUSE` and
+closes the session. Reusing the connected socket fixes this overlap without
+creating competing receivers. Dynamic Resolution and SharpShare resizing both
+passed a live test on macOS 26.7.1, including four successive replacements with
+decoded frames returning after each. Other macOS builds remain unverified.
 
 Live debugging found that avconferenced rejects the ad-hoc copy's
 `vcMediaStreamSetSessionConfig` request at its authorization check. Selecting
@@ -94,13 +104,14 @@ Private counters and fixed error labels are saved to
 keys, payloads or host addresses are written by our shim. Apple's own logging
 and preferences remain managed by Apple's implementation.
 
-Report schema 5 (`transportRevision: 6`) records adapter-side refusal reasons separately from backend
+Report schema 5 (`transportRevision: 7`) records adapter-side refusal reasons separately from backend
 socket failures. The dialog identifies a different selected host/port, pending cleanup, the
 restart limit, or the actual socket operation/error/port. A stopped relay is
 retired before a new attempt; its old reader must reach EOF before the next
 reader starts. A `ready` event records successful relay reservation;
 it does not establish native authentication or media delivery.
-`nativeMedia` records connected socket creations, native stream-start successes
+`nativeMedia` records connected socket creations, `reusedMediaSockets` descriptor
+handoffs to replacement streams, native stream-start successes
 or failures, first-frame callbacks, received-RTCP callbacks and RTP/RTCP
 timeouts. Absent counters mean no corresponding callback has been observed.
 `nativeMediaFailure` gives the failing native socket stage, local port and errno.
@@ -147,7 +158,10 @@ it loads the shim, checks its method signatures, opens the native UI and tests
 a synthetic TCP greeting plus bidirectional datagrams through all three actual
 Apple XPC socket dictionaries and the owned Ruby child. It verifies local/peer
 addresses, IPv4-mapped configuration, destination-free connected sends and
-explicit refusal of an occupied native port. It uses temporary ports and
+explicit refusal of an independently occupied native port. It also replaces
+each channel's socket dictionary three times while the old descriptor is still
+open, checks queued-packet delivery and connected feedback after handoff, and
+verifies that shutdown releases the adapter's native ports. It uses temporary ports and
 does not close the original viewer. This fixture passed locally with developer
 tool discovery disabled; it does not prove authenticated media or input works.
 

@@ -38,6 +38,28 @@ static double firstConnectTime;
 static BOOL probeMode;
 static unsigned udpCalls;
 static NSString *failure;
+// AVC replaces streams before their previous socket descriptors are released.
+// Keep one exclusive connected socket per channel for the relay's lifetime;
+// each stream gets a close-on-exec duplicate of the same receive queue.
+static int nativeMediaSockets[3] = {-1, -1, -1};
+static BOOL nativeMediaSocketsEnabled;
+
+static NSObject *mediaSocketLock(void) {
+    static NSObject *lock;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    return lock;
+}
+
+static void closeNativeMediaSockets(void) {
+    @synchronized(mediaSocketLock()) {
+        nativeMediaSocketsEnabled = NO;
+        for (unsigned i = 0; i < 3; ++i) {
+            if (nativeMediaSockets[i] >= 0) close(nativeMediaSockets[i]);
+            nativeMediaSockets[i] = -1;
+        }
+    }
+}
 
 static void saveReport(void) {
     @synchronized(report) {
@@ -82,6 +104,7 @@ static BOOL consumeEvents(NSData *data) {
 }
 
 static void stopRelay(void) {
+    closeNativeMediaSockets();
     if (!relay) return;
     @try { [relayInput.fileHandleForWriting closeFile]; } @catch (__unused NSException *exception) {}
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1];
@@ -204,6 +227,7 @@ static BOOL startRelay(NSString *host, uint16_t port) {
         ready = consumeEvents([NSData dataWithBytes:buffer length:(NSUInteger)length]);
     }
     if (!ready) { if (!failure) failure = @"relayStartupTimeout"; stopRelay(); return recordStartFailure(failure); }
+    @synchronized(mediaSocketLock()) { nativeMediaSocketsEnabled = YES; }
     relayReader = dispatch_group_create();
     dispatch_group_async(relayReader, eventQueue, ^{
         for (;;) {
@@ -215,6 +239,7 @@ static BOOL startRelay(NSString *host, uint16_t port) {
             saveReport();
         }
         [output.fileHandleForReading closeFile];
+        closeNativeMediaSockets();
         saveReport();
     });
     return YES;
@@ -507,17 +532,18 @@ static int mediaFailure(NSString *stage, uint16_t port, int error) {
     return -1;
 }
 
-static int connectMediaThroughRuby(id cls, SEL selector, id config, uint16_t port) {
-    (void)cls; (void)selector;
-    __atomic_add_fetch(&udpCalls, 1, __ATOMIC_RELAXED);
+// Called with mediaSocketLock held, including validation and descriptor handoff.
+static int mediaSocketForConfig(id config, uint16_t port) {
     id remote = ((id (*)(id, SEL))objc_msgSend)(config, NSSelectorFromString(@"remoteAddress"));
     NSString *ip = ((id (*)(id, SEL))objc_msgSend)(remote, NSSelectorFromString(@"ip"));
-    if (!relay.running || port < mediaBase || port >= mediaBase + 3 ||
+    if (!nativeMediaSocketsEnabled || !relay.running || port < mediaBase || port >= mediaBase + 3 ||
         !([ip isEqual:@"127.0.0.1"] || [ip isEqual:@"::ffff:127.0.0.1"])) {
         return mediaFailure(@"unexpectedMediaEndpoint", port, EINVAL);
     }
-    uint16_t localPort = nativeMediaBase + (port - mediaBase);
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    unsigned channel = port - mediaBase;
+    uint16_t localPort = nativeMediaBase + channel;
+    BOOL reused = nativeMediaSockets[channel] >= 0;
+    int fd = reused ? nativeMediaSockets[channel] : socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) return mediaFailure(@"socket", localPort, errno);
     NSString *stage = @"socketOptions";
     int receiveBuffer = 262144, sendBuffer = 131072;
@@ -525,16 +551,21 @@ static int connectMediaThroughRuby(id cls, SEL selector, id config, uint16_t por
         .sin_addr.s_addr=htonl(INADDR_LOOPBACK), .sin_port=htons(localPort)};
     struct sockaddr_in peer = local;
     peer.sin_port = htons(port);
-    // An exclusive, genuinely connected pair replaces the old duplicate-tuple
-    // trick. Apple's XPC socket dictionary carries this descriptor into AVC.
-    // Ruby alone owns LAN media ports; AVC receives and sends only on loopback.
-    if (fcntl(fd, F_SETFD, FD_CLOEXEC) ||
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &receiveBuffer, sizeof(receiveBuffer)) ||
-        setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sendBuffer, sizeof(sendBuffer))) goto failed;
-    stage = @"bind";
-    if (bind(fd, (struct sockaddr *)&local, sizeof(local))) goto failed;
-    stage = @"connect";
-    if (connect(fd, (struct sockaddr *)&peer, sizeof(peer))) goto failed;
+    // Ruby alone owns LAN media ports. Never create competing UDP sockets for
+    // one loopback tuple: preserve queued packets across AVC stream replacement.
+    if (!reused) {
+        if (fcntl(fd, F_SETFD, FD_CLOEXEC) ||
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &receiveBuffer, sizeof(receiveBuffer)) ||
+            setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sendBuffer, sizeof(sendBuffer))) goto failed;
+        stage = @"bind";
+        if (bind(fd, (struct sockaddr *)&local, sizeof(local))) goto failed;
+        stage = @"connect";
+        if (connect(fd, (struct sockaddr *)&peer, sizeof(peer))) goto failed;
+    }
+    stage = @"duplicate";
+    int owned = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (owned < 0) goto failed;
+    nativeMediaSockets[channel] = fd;
     // Set fresh address objects: negotiated config objects may share addresses.
     // Only the local transport endpoints change, never keys or codec options.
     ((void (*)(id, SEL, id))objc_msgSend)(config, NSSelectorFromString(@"setLocalAddress:"), mediaAddress(localPort));
@@ -543,16 +574,23 @@ static int connectMediaThroughRuby(id cls, SEL selector, id config, uint16_t por
     @synchronized(report) {
         NSMutableDictionary *media = [report[@"nativeMedia"] mutableCopy] ?: [NSMutableDictionary new];
         media[@"transport"] = @"connectedLoopbackPair";
-        media[@"connectedSockets"] = @([media[@"connectedSockets"] unsignedIntegerValue] + 1);
+        NSString *counter = reused ? @"reusedMediaSockets" : @"connectedSockets";
+        media[counter] = @([media[counter] unsignedIntegerValue] + 1);
         report[@"nativeMedia"] = media;
         saveReport();
     }
-    return fd;
+    return owned;
 failed: {
     int error = errno;
-    close(fd);
+    if (!reused) close(fd);
     return mediaFailure(stage, localPort, error);
 }
+}
+
+static int connectMediaThroughRuby(id cls, SEL selector, id config, uint16_t port) {
+    (void)cls; (void)selector;
+    __atomic_add_fetch(&udpCalls, 1, __ATOMIC_RELAXED);
+    @synchronized(mediaSocketLock()) { return mediaSocketForConfig(config, port); }
 }
 
 static int boundSocket(int kind, struct in_addr address, uint16_t port, uint16_t *actual) {
@@ -568,6 +606,12 @@ static int boundSocket(int kind, struct in_addr address, uint16_t port, uint16_t
 
 // This runs only under the explicit packaged self-test, with ephemeral local
 // peers and synthetic bytes. It does not authenticate, capture or decode media.
+// Declare the native factory so ARC honors its `new` (retained) result. A raw
+// objc_msgSend cast would leak the dictionary and its duplicated descriptor.
+@interface NSObject (RubiedSocketDictionaryFixture)
++ (xpc_object_t)newRTPSocketDictionaryWithConfig:(id)config port:(uint16_t)port;
+@end
+
 static BOOL transportProbe(void) {
     int owned[16], count = 0;
     id session = nil;
@@ -664,6 +708,24 @@ static BOOL transportProbe(void) {
         if (poll(&wait, 1, 3000) <= 0) goto done;
         char reply[12];
         if (recv(control, reply, 12, MSG_WAITALL) != 12 || memcmp(reply, "RFB ", 4)) goto done;
+        // A port occupied by an unrelated socket must still be refused. Stream
+        // handoff may only reuse sockets that this adapter already owns.
+        uint16_t blockedPort;
+        int blocker = boundSocket(SOCK_DGRAM, (struct in_addr){.s_addr=htonl(INADDR_LOOPBACK)}, nativeMediaBase, &blockedPort);
+        if (blocker < 0) goto done;
+        owned[count++] = blocker;
+        id conflictConfig = [NSClassFromString(@"AVCMediaStreamConfig") new];
+        ((void (*)(id, SEL, id))objc_msgSend)(conflictConfig, NSSelectorFromString(@"setRemoteAddress:"), mediaAddress(mediaBase));
+        int conflict = ((int (*)(id, SEL, id, uint16_t))objc_msgSend)(NSClassFromString(@"SSSession"),
+            NSSelectorFromString(@"udpSocketWithAVCMediaStreamConfig:port:"), conflictConfig, mediaBase);
+        if (conflict >= 0) { close(conflict); goto done; }
+        @synchronized(report) {
+            if (![report[@"nativeMediaFailure"][@"stage"] isEqual:@"bind"] ||
+                ![report[@"nativeMediaFailure"][@"errno"] isEqual:@(EADDRINUSE)]) goto done;
+            [report removeObjectForKey:@"nativeMediaFailure"]; // Expected negative fixture only.
+        }
+        close(blocker); --count;
+        fprintf(stderr, "RUBIED_PROBE nativeSocketConflictRefused=1\n");
         for (int offset = 0; offset < 3; ++offset) {
             id config = [NSClassFromString(@"AVCMediaStreamConfig") new];
             id remoteMedia = mediaAddress(mediaBase + offset);
@@ -672,11 +734,11 @@ static BOOL transportProbe(void) {
                 ((void (*)(id, SEL, BOOL))objc_msgSend)(remoteMedia, NSSelectorFromString(@"setIsIPv6:"), YES);
             }
             ((void (*)(id, SEL, id))objc_msgSend)(config, NSSelectorFromString(@"setRemoteAddress:"), remoteMedia);
-            xpc_object_t dictionary = ((id (*)(id, SEL, id, uint16_t))objc_msgSend)(NSClassFromString(@"SSSession"),
-                NSSelectorFromString(@"newRTPSocketDictionaryWithConfig:port:"), config, mediaBase + offset);
+            xpc_object_t dictionary = [NSClassFromString(@"SSSession") newRTPSocketDictionaryWithConfig:config port:mediaBase + offset];
             if (!dictionary) goto done;
             int native = xpc_dictionary_dup_fd(dictionary, "avcKeySharedSocket");
             if (native < 0) goto done;
+            int nativeIndex = count;
             owned[count++] = native;
             struct sockaddr_in peer = {0}, bound = {0};
             size = sizeof(peer);
@@ -687,33 +749,39 @@ static BOOL transportProbe(void) {
                 bound.sin_addr.s_addr != htonl(INADDR_LOOPBACK) || bound.sin_port != htons(nativeMediaBase + offset)) goto done;
             id configuredLocal = ((id (*)(id, SEL))objc_msgSend)(config, NSSelectorFromString(@"localAddress"));
             if (((uint16_t (*)(id, SEL))objc_msgSend)(configuredLocal, NSSelectorFromString(@"port")) != nativeMediaBase + offset) goto done;
-            uint8_t packet[32]; arc4random_buf(packet, sizeof(packet));
-            destination.sin_addr = local.sin_addr; destination.sin_port = htons(mediaBase + offset);
-            if (sendto(peers[offset], packet, sizeof(packet), 0, (struct sockaddr *)&destination, sizeof(destination)) != sizeof(packet)) goto done;
-            wait.fd = native;
-            if (poll(&wait, 1, 1500) <= 0) goto done;
-            uint8_t received[64];
-            struct sockaddr_in sender = {0}; size = sizeof(sender);
-            if (recvfrom(native, received, sizeof(received), 0, (struct sockaddr *)&sender, &size) != sizeof(packet) ||
-                memcmp(packet, received, sizeof(packet)) || sender.sin_addr.s_addr != htonl(INADDR_LOOPBACK) ||
-                sender.sin_port != peer.sin_port) goto done;
-            // No supplied destination: this specifically requires a connected
-            // descriptor, unlike r3's sendto-only wildcard-socket fixture.
-            if (send(native, packet, sizeof(packet), 0) != sizeof(packet)) goto done;
-            wait.fd = peers[offset];
-            if (poll(&wait, 1, 1500) <= 0 || recv(peers[offset], received, sizeof(received), 0) != sizeof(packet) || memcmp(packet, received, sizeof(packet))) goto done;
+            for (unsigned handoff = 0; handoff < 3; ++handoff) {
+                uint8_t packet[32]; arc4random_buf(packet, sizeof(packet));
+                destination.sin_addr = local.sin_addr; destination.sin_port = htons(mediaBase + offset);
+                if (sendto(peers[offset], packet, sizeof(packet), 0, (struct sockaddr *)&destination, sizeof(destination)) != sizeof(packet)) goto done;
+                wait.fd = native;
+                if (poll(&wait, 1, 1500) <= 0) goto done;
+                // The packet is already queued on the old descriptor. Replace
+                // the stream before retiring that descriptor. The new native
+                // XPC handoff must keep that very same receive queue.
+                id nextConfig = [NSClassFromString(@"AVCMediaStreamConfig") new];
+                ((void (*)(id, SEL, id))objc_msgSend)(nextConfig, NSSelectorFromString(@"setRemoteAddress:"), mediaAddress(mediaBase + offset));
+                dictionary = [NSClassFromString(@"SSSession") newRTPSocketDictionaryWithConfig:nextConfig port:mediaBase + offset];
+                if (!dictionary) goto done;
+                int replacement = xpc_dictionary_dup_fd(dictionary, "avcKeySharedSocket");
+                if (replacement < 0) goto done;
+                close(native); native = replacement; owned[nativeIndex] = native;
+                configuredLocal = ((id (*)(id, SEL))objc_msgSend)(nextConfig, NSSelectorFromString(@"localAddress"));
+                if (((uint16_t (*)(id, SEL))objc_msgSend)(configuredLocal, NSSelectorFromString(@"port")) != nativeMediaBase + offset) goto done;
+                wait.fd = native;
+                if (poll(&wait, 1, 1500) <= 0) goto done;
+                uint8_t received[64];
+                struct sockaddr_in sender = {0}; size = sizeof(sender);
+                if (recvfrom(native, received, sizeof(received), 0, (struct sockaddr *)&sender, &size) != sizeof(packet) ||
+                    memcmp(packet, received, sizeof(packet)) || sender.sin_addr.s_addr != htonl(INADDR_LOOPBACK) ||
+                    sender.sin_port != peer.sin_port) goto done;
+                // No supplied destination: this specifically requires a connected
+                // descriptor, unlike r3's sendto-only wildcard-socket fixture.
+                if (send(native, packet, sizeof(packet), 0) != sizeof(packet)) goto done;
+                wait.fd = peers[offset];
+                if (poll(&wait, 1, 1500) <= 0 || recv(peers[offset], received, sizeof(received), 0) != sizeof(packet) || memcmp(packet, received, sizeof(packet))) goto done;
+            }
         }
-        id conflictConfig = [NSClassFromString(@"AVCMediaStreamConfig") new];
-        ((void (*)(id, SEL, id))objc_msgSend)(conflictConfig, NSSelectorFromString(@"setRemoteAddress:"), mediaAddress(mediaBase));
-        int duplicate = ((int (*)(id, SEL, id, uint16_t))objc_msgSend)(NSClassFromString(@"SSSession"),
-            NSSelectorFromString(@"udpSocketWithAVCMediaStreamConfig:port:"), conflictConfig, mediaBase);
-        if (duplicate >= 0) { close(duplicate); goto done; }
-        @synchronized(report) {
-            if (![report[@"nativeMediaFailure"][@"stage"] isEqual:@"bind"] ||
-                ![report[@"nativeMediaFailure"][@"errno"] isEqual:@(EADDRINUSE)]) goto done;
-            [report removeObjectForKey:@"nativeMediaFailure"]; // Expected negative fixture only.
-        }
-        fprintf(stderr, "RUBIED_PROBE nativeSocketConflictRefused=1\n");
+        fprintf(stderr, "RUBIED_PROBE mediaSocketHandoffs=9\n");
         fprintf(stderr, "RUBIED_PROBE connectedMediaSocketDictionaries=3\n");
         success = YES;
     } @catch (__unused NSException *exception) { success = NO; }
@@ -722,6 +790,12 @@ done:
     for (int i = 0; i < count; ++i) close(owned[i]);
     stopRelay();
     dispatch_sync(eventQueue, ^{});
+    if (success) for (unsigned offset = 0; offset < 3; ++offset) {
+        uint16_t actual;
+        int released = boundSocket(SOCK_DGRAM, (struct in_addr){.s_addr=htonl(INADDR_LOOPBACK)}, nativeMediaBase + offset, &actual);
+        if (released < 0) { success = NO; break; }
+        close(released);
+    }
     fprintf(stderr, "RUBIED_PROBE tcpAndThreeNativeUDPChannels=%d udpHookCalls=%u\n", success, udpCalls);
     return success;
 }
@@ -760,7 +834,7 @@ __attribute__((constructor)) static void installRubied(void) {
             _exit(78);
         }
         pendingEvents = [NSMutableData data];
-        report = [@{@"schemaVersion":@5, @"transportRevision":@6, @"product":@"screen-sharing-rubyfier", @"highPerformanceSession":@"unverified"} mutableCopy];
+        report = [@{@"schemaVersion":@5, @"transportRevision":@7, @"product":@"screen-sharing-rubyfier", @"highPerformanceSession":@"unverified"} mutableCopy];
         eventQueue = dispatch_queue_create("com.andotsy.rubied.events", DISPATCH_QUEUE_SERIAL);
         originalConnect = (ConnectIMP)method_setImplementation(connect, (IMP)connectThroughRuby);
         method_setImplementation(udp, (IMP)connectMediaThroughRuby);
